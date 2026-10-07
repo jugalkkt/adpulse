@@ -13,7 +13,7 @@
 - **Phase 9: DONE** (2026-10-07). DoD passed. 13 chaos runs (10 scenarios in staging, a db-down re-run, a 2-run prod game day), each with an RCA. deploy-bad-release follows in Phase 10.
 - **Phase 10: DONE** (2026-10-07). DoD passed. Both envs run `18a0065` (deployed by CD and promote). The runner is registered and runs from Jugal's terminal (`~/actions-runner/run.sh`).
 - **Phase 11: DONE** (2026-10-07). DoD passed. Both envs on `cdee903` (rolled out with `make up` under a silence).
-- **Phase 12: IN PROGRESS.** ⚠️ **AWS RESOURCES ARE RUNNING** (since 15:28–15:29 UTC 2026-10-07): instance `i-09a1cb3cf4c8bdef7` (c7i-flex.large, ap-south-1a, 13.126.89.199) + VPC/subnet/IGW/RT/SG/key pair. **Must be destroyed today** (`terraform -chdir=infra/terraform/aws destroy -var my_ip=<ip>`, after `envs/aws` is destroyed if it exists).
+- **Phase 12:** AWS resources **destroyed and verified empty at 2026-10-07T17:04:55Z**. Waiting on Jugal to delete the access key (Q11).
 
 ## Phase 0: Preflight
 
@@ -370,7 +370,14 @@ Raw logs of the failed attempts are kept in `incidents/raw/` (gitignored).
   - Finding: at first bring-up, ApiReplicaDown fired before the first deploy existed, and the healer correctly escalated (`replicas=[]`). Action: silence API alerts on a brand-new env until its first deploy.
   - Chaos on aws-prod (`--confirm-prod`; the guard refused without it): **replica-down MTTD 28.9 s / MTTR 52.1 s, 0 failed**; **db-down MTTD 20.9 s / MTTR 40.2 s, 0 failed, 13.5% house ads API-side**. RCAs written; SUMMARY.md has 16 rows.
   - The chaos/RCA tools now take env-var overrides for remote envs (ALERTMANAGER_URL, PROMETHEUS_URL, ADPULSE_URL_<ENV>, HEAL_LOG_CMD, DOCKER_HOST).
-- Next: 🧑 12.12 screenshots, then **12.13 TEARDOWN** (envs/aws destroy → aws destroy → verify empty → delete access key).
+- 12.12 screenshots saved by Jugal in `docs/screenshots/` (01–08, JPG). The account ID in the EC2 screenshot was blacked out before committing. The AWS Grafana through the tunnel failed to load the Prometheus plugin (Grafana's appUrl is localhost:3000, but the tunnel used :13000, so it was cross-origin), so 04 is from the local Grafana. Alertmanager screenshot: staging latency injected on Redis + Postgres (16:55:46 UTC), AdPulseHighLatencyP95 firing at 16:58:02, removed with `chaos.py stop` (no leftover faults).
+- 12.13 TEARDOWN:
+  - AWS heal log copied to `incidents/aws-prod-heal-log.jsonl` (4 entries); API replicas removed.
+  - Q10 → `envs/aws` destroy: **36 destroyed**; VM had 0 containers, 0 volumes.
+  - Q10 → `infra/terraform/aws` destroy: **11 destroyed at 2026-10-07T17:04:55Z**.
+  - Verified with the AWS CLI (ap-south-1, tag Project=AdPulse): 0 instances, 0 volumes, 0 Elastic IPs, 0 SGs, 0 VPCs, 0 `adpulse-aws` key pairs; i-09a1cb3cf4c8bdef7 = terminated; both Terraform states empty; SSH tunnel closed.
+  - (Tooling slip: a `pkill -f` pattern matched its own shell twice. Use `pgrep -f '[x]…'`.)
+- Waiting on: 🧑 delete the `adpulse-cli` access key (and optionally the user) → 🛑 Q11.
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.
