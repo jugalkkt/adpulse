@@ -1,0 +1,101 @@
+# Unit tests for alert rules: make test-rules (promtool test rules).
+rule_files:
+  - ../rules/recording.yml
+  - ../rules/alerts.yml
+evaluation_interval: 5s
+
+tests:
+  # DB goes down at t=10s; "for: 15s" means pending at 20s, firing by 30s.
+  - name: database down fires after 15s
+    interval: 5s
+    input_series:
+      - series: 'pg_up{job="postgres", env="staging", instance="postgres-exporter-staging:9187"}'
+        values: "1 1 0x20"
+    alert_rule_test:
+      - eval_time: 20s
+        alertname: AdPulseDatabaseDown
+        exp_alerts: []
+      - eval_time: 30s
+        alertname: AdPulseDatabaseDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: postgres
+              env: staging
+              instance: postgres-exporter-staging:9187
+            exp_annotations:
+              summary: "PostgreSQL in staging is down"
+              description: "postgres_exporter cannot connect to postgres-staging (pg_up == 0) for 15s."
+              runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/AdPulseDatabaseDown.md
+
+  # 10 of every 60 requests fail (16.7% > 5%) -> fires after 1m of that.
+  - name: high error rate fires, healthy env does not
+    interval: 5s
+    input_series:
+      - series: 'adpulse_http_requests_total{job="api", env="staging", instance="a:8000", route="/v1/ad", method="GET", status="200"}'
+        values: "0+50x60"
+      - series: 'adpulse_http_requests_total{job="api", env="staging", instance="a:8000", route="/v1/ad", method="GET", status="500"}'
+        values: "0+10x60"
+      - series: 'adpulse_http_requests_total{job="api", env="prod", instance="b:8000", route="/v1/ad", method="GET", status="200"}'
+        values: "0+50x60"
+    alert_rule_test:
+      - eval_time: 2m30s
+        alertname: AdPulseHighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              env: staging
+            exp_annotations:
+              summary: "staging: 16.67% of /v1/ad requests fail"
+              description: "5xx ratio over 1m has been above 5% for 1m."
+              runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/AdPulseHighErrorRate.md
+
+  # One of two replicas disappears from DNS (stopped) -> "missing" variant fires.
+  - name: stopped replica is detected even without an up==0 series
+    interval: 5s
+    input_series:
+      - series: 'up{job="api", env="staging", instance="a:8000"}'
+        values: "1x30"
+      # Removed from DNS SD at t=20s: Prometheus writes a stale marker.
+      - series: 'up{job="api", env="staging", instance="b:8000"}'
+        values: "1x3 stale"
+      - series: 'up{job="api", env="prod", instance="c:8000"}'
+        values: "1x30"
+      - series: 'up{job="api", env="prod", instance="d:8000"}'
+        values: "1x30"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: AdPulseApiReplicaDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              reason: missing
+              env: staging
+            exp_annotations:
+              summary: "staging has fewer healthy API replicas than expected"
+              description: "Healthy replicas in staging are below the expected 2 for 15s (a replica is stopped or missing)."
+              runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/AdPulseApiReplicaDown.md
+
+  # Junk grows the backup dir by 20 MB every 15s: the trend crosses the quota
+  # within the hour long before the directory itself is full.
+  - name: backup quota forecast fires before the quota is reached
+    interval: 15s
+    input_series:
+      - series: 'adpulse_backup_dir_bytes{job="node", env="staging", instance="node-exporter:9100"}'
+        values: "0+20000000x12"
+      - series: 'adpulse_backup_quota_bytes{job="node", env="staging", instance="node-exporter:9100"}'
+        values: "209715200x12"
+    alert_rule_test:
+      - eval_time: 30s
+        alertname: BackupQuotaWillFillSoon
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: BackupQuotaWillFillSoon
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              env: staging
+            exp_annotations:
+              summary: "staging: backup directory will exceed its quota within 1h"
+              description: "At the current growth rate (last 10m) the backup directory reaches 4.619GiB within an hour, above the quota."
+              runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/BackupQuotaWillFillSoon.md

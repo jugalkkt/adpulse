@@ -1,0 +1,12 @@
+# Ruff settings for Python outside app/ (scripts/, monitoring/, healer/, chaos/, tools/).
+# app/ has its own pyproject.toml with the same style.
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "S"]
+ignore = ["S311"]
+
+[lint.per-file-ignores]
+"scripts/check_dashboards.py" = ["S310"]  # urlopen on a fixed local Prometheus URL
+"**/tests/**" = ["S101", "S105", "S106"]
