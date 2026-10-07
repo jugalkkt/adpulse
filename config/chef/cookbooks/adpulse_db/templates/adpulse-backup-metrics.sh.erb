@@ -1,0 +1,42 @@
+#!/bin/bash
+# Managed by Chef (Cinc), cookbook adpulse_db.
+# Writes Prometheus textfile metrics for node_exporter, atomically (tmp + mv).
+set -euo pipefail
+
+ENV_NAME="${ADPULSE_ENV:?ADPULSE_ENV must be set}"
+DIR="<%= @attrs['backup_dir'] %>"
+TEXTFILE_DIR="<%= @attrs['textfile_dir'] %>"
+QUOTA="${BACKUP_QUOTA_BYTES:-<%= @attrs['backup_quota_bytes'] %>}"
+STATE="$DIR/.state-$ENV_NAME"
+
+last_success=0
+last_duration=0
+if [[ -f "$STATE" ]]; then
+  # shellcheck disable=SC1090
+  source "$STATE"
+fi
+
+dir_bytes="$(du -sb "$DIR" | cut -f1)"
+files="$(find "$DIR" -maxdepth 1 -type f ! -name '.*' | wc -l)"
+
+out="$TEXTFILE_DIR/backup_$ENV_NAME.prom"
+l="env=\"$ENV_NAME\""
+cat > "$out.tmp" <<PROM
+# HELP adpulse_backup_last_success_timestamp_seconds Unix time of the last successful backup.
+# TYPE adpulse_backup_last_success_timestamp_seconds gauge
+adpulse_backup_last_success_timestamp_seconds{$l} $last_success
+# HELP adpulse_backup_last_duration_seconds Duration of the last successful backup.
+# TYPE adpulse_backup_last_duration_seconds gauge
+adpulse_backup_last_duration_seconds{$l} $last_duration
+# HELP adpulse_backup_dir_bytes Bytes used by the backup directory.
+# TYPE adpulse_backup_dir_bytes gauge
+adpulse_backup_dir_bytes{$l} $dir_bytes
+# HELP adpulse_backup_quota_bytes Quota for the backup directory.
+# TYPE adpulse_backup_quota_bytes gauge
+adpulse_backup_quota_bytes{$l} $QUOTA
+# HELP adpulse_backup_files Number of files in the backup directory.
+# TYPE adpulse_backup_files gauge
+adpulse_backup_files{$l} $files
+PROM
+chmod 0644 "$out.tmp"
+mv "$out.tmp" "$out"

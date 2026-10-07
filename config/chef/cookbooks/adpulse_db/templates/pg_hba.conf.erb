@@ -1,0 +1,10 @@
+# Managed by Chef (Cinc), cookbook adpulse_db. Do not edit by hand.
+# TYPE  DATABASE  USER      ADDRESS              METHOD
+# Local socket: OS user postgres -> DB role postgres (docker exec psql, healer diagnostics).
+local   all       postgres                       peer
+# Local socket for everyone else (init scripts use PGPASSWORD): password required.
+local   all       all                            scram-sha-256
+# Container networks of the AdPulse environments only. No "trust" anywhere.
+<% @cidrs.each do |cidr| -%>
+host    all       all       <%= cidr.ljust(20) %> scram-sha-256
+<% end -%>

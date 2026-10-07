@@ -1,0 +1,17 @@
+#!/bin/bash
+# Managed by Chef (Cinc), cookbook adpulse_db.
+# Runs once inside docker-entrypoint on an empty data directory, as the
+# superuser POSTGRES_USER. Creates the app role (owns database adpulse) and a
+# read-only monitoring role for postgres_exporter. Passwords come from env.
+set -euo pipefail
+: "${ADPULSE_APP_PASSWORD:?ADPULSE_APP_PASSWORD must be set}"
+: "${ADPULSE_MONITOR_PASSWORD:?ADPULSE_MONITOR_PASSWORD must be set}"
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+  -v app_pw="$ADPULSE_APP_PASSWORD" -v mon_pw="$ADPULSE_MONITOR_PASSWORD" <<'SQL'
+CREATE ROLE adpulse LOGIN PASSWORD :'app_pw';
+CREATE DATABASE adpulse OWNER adpulse;
+CREATE ROLE adpulse_monitor LOGIN PASSWORD :'mon_pw' CONNECTION LIMIT 3;
+GRANT pg_monitor TO adpulse_monitor;
+SQL
+echo "adpulse roles created"

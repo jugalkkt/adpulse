@@ -5,7 +5,8 @@
 - **Phase 1: DONE** (2026-10-07). DoD passed. Repo: https://github.com/jugalkkt/adpulse (private).
 - **Phase 2: DONE** (2026-10-07). DoD passed.
 - **Phase 3: DONE** (2026-10-07). DoD passed.
-- **Phase 4:** next (Postgres image with Chef/Cinc + backup agent).
+- **Phase 4: DONE** (2026-10-07). DoD passed.
+- **Phase 5:** next (local infrastructure with Terraform).
 
 ## Phase 0: Preflight
 
@@ -118,6 +119,27 @@
   - Docker health `healthy` after 6 s; `/healthz` 200; `/readyz` 503 with details.
   - `/v1/ad` 200 `source=fallback` in 0.52 s; chaos route 404; runs as `adpulse`; rootfs write denied; JSON logs only.
 - Loadgen entrypoint: 10 requests per 2 s window at 5 rps.
+
+## Phase 4: Database image with Chef (Cinc) + backup agent
+
+### Built (2026-10-07)
+- Cookbook `config/chef/cookbooks/adpulse_db`:
+  - Attributes from the plan, plus `allowed_cidrs` (D018).
+  - `recipes/default.rb` renders `/etc/adpulse-db/{postgresql.conf,pg_hba.conf,chef-report.txt}`, the initdb roles script (D020), `/backups` + `/textfile` (owned by postgres), and `adpulse-backup{,-metrics,-loop}.sh`.
+  - `recipes/host.rb` stub.
+- `docker/postgres/Dockerfile`: postgres 18.6-trixie (digest), Cinc 19.3.14 via hash-pinned deb (D019), converge twice, Cinc purged.
+- `scripts/test_postgres_image.sh` → `make test-postgres`. Also `make build-postgres` and `make lint-chef`.
+- `.env.example`: added `<ENV>_DB_MONITOR_PASSWORD` (`make secrets` added 3, kept the rest).
+
+### Phase 4 DoD (2026-10-07)
+- `make build-postgres`: exit 0. Converge #1: 10/10 resources updated. **Converge #2: 0/10 resources updated** (log in the image at `/etc/adpulse-db/cinc-idempotency.log`). Our layer is 3.9 MB (the base image is 644 MB); no `/opt/cinc`, cinc or curl packages left.
+  - First build failed only because my check grepped for "Cinc Client finished"; Cinc 19 prints "Infra Phase complete". Fixed the regex.
+- `make lint-chef`: cookstyle "4 files inspected, no offenses detected".
+- `make test-postgres`: 14/14 PASS:
+  - `SHOW shared_buffers` = 128MB; max_connections 50; scram-sha-256; statement_timeout 5s.
+  - Correct password connects; monitor role reads pg_stat_activity; **wrong password rejected** ("password authentication failed"); a non-allowed subnet is rejected ("no pg_hba.conf entry"); no trust lines.
+  - Backup loop: `pgtest-20261007T071516Z.dump` (pg_restore --list OK, 0.099 s). The `.prom` file passes `promtool check metrics` (Prometheus v3.15.0) and has all 5 metrics.
+  - No leftover test containers, networks or volumes.
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.
