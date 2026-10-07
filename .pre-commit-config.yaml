@@ -1,0 +1,43 @@
+# Hook revisions are pinned; refresh with `pre-commit autoupdate`.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-added-large-files
+  # gitleaks runs from its pinned image: the upstream golang hook needs
+  # proxy.golang.org, which this network blocks (docs/DECISIONS.md D007).
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: gitleaks (docker, pinned)
+        language: docker_image
+        entry: zricethezav/gitleaks:v8.30.0@sha256:691af3c7c5a48b16f187ce3446d5f194838f91238f27270ed36eef6359a574d9 git --pre-commit --redact --staged --verbose
+        pass_filenames: false
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.109.2
+    hooks:
+      - id: terraform_fmt
+  # shellcheck uses the host binary from bootstrap.sh: shellcheck-py downloads
+  # from GitHub releases at install time, which this network resets (D007).
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: shellcheck (system)
+        language: system
+        entry: shellcheck
+        types: [shell]
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args: [-c, .yamllint.yml]
