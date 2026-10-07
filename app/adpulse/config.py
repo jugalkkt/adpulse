@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     db_timeout_seconds: float = Field(default=0.5, gt=0)
     redis_timeout_seconds: float = Field(default=0.2, gt=0)
     db_pool_max_size: int = Field(default=5, ge=1)
+    # psycopg_pool retries with unbounded doubling (1,2,4,...,64s) until this
+    # timeout; a short one restarts the backoff, so recovery after a long DB
+    # outage takes seconds, not a minute (docs/DECISIONS.md D038).
+    db_reconnect_timeout_seconds: float = Field(default=10, gt=0)
     impression_queue_size: int = Field(default=1000, ge=1)
 
     @property

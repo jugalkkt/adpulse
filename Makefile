@@ -18,7 +18,7 @@ define todo
 	@echo "make $@: not implemented yet ($(1))" >&2; exit 1
 endef
 
-.PHONY: migrate smoke lint-ansible check-env plan-infra plan-monitoring lint-terraform help check secrets build build-base build-api build-postgres lock lint lint-puppet lint-chef lint-app tools-puppet test test-postgres scan infra monitoring deploy rollback status \
+.PHONY: lint-monitoring test-rules reload-monitoring migrate smoke lint-ansible check-env plan-infra plan-monitoring lint-terraform help check secrets build build-base build-api build-postgres lock lint lint-puppet lint-chef lint-app tools-puppet test test-postgres scan infra monitoring deploy rollback status \
         up down chaos chaos-stop rca aws-plan aws-up aws-bootstrap aws-deploy aws-down urls
 
 help: ## List targets
@@ -52,7 +52,7 @@ lock: ## Re-lock Python dependencies with hashes (app/requirements*.in -> .txt)
 	  for f in requirements requirements-dev; do \
 	    /tmp/v/bin/pip-compile -q --generate-hashes --allow-unsafe --strip-extras --no-header -o $$f.txt $$f.in; done'
 
-lint: lint-puppet lint-chef lint-app lint-terraform lint-ansible ## Run all linters
+lint: lint-puppet lint-chef lint-app lint-terraform lint-ansible lint-monitoring ## Run all linters
 
 CINC_WORKSTATION := cincproject/workstation:26.3.0@sha256:b19f9949b1012e5a9cd93b68ee1d00b705fc66e1d47f4283471cddf293500830
 
@@ -74,6 +74,20 @@ lint-puppet: tools-puppet ## puppet parser/epp validate + puppet-lint
 	  puppet epp validate modules/adpulse/templates/*.epp && \
 	  puppet-lint --fail-on-warnings --relative manifests modules && \
 	  echo "puppet lint: clean"'
+
+PROM_IMAGE := prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
+AM_IMAGE := prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a
+
+lint-monitoring: ## promtool check config/rules + amtool check-config
+	docker run --rm --network none -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" --entrypoint promtool $(PROM_IMAGE) check config /etc/prometheus/prometheus.yml
+	docker run --rm --network none -v "$(CURDIR)/monitoring/alertmanager:/etc/alertmanager:ro" --entrypoint amtool $(AM_IMAGE) check-config /etc/alertmanager/alertmanager.yml
+
+test-rules: ## promtool unit tests for alert rules
+	docker run --rm --network none -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" -w /etc/prometheus/tests --entrypoint promtool $(PROM_IMAGE) test rules alerts_test.yml
+
+reload-monitoring: ## Hot-reload Prometheus and Alertmanager config
+	@curl -fsS -X POST http://127.0.0.1:9090/-/reload && echo "prometheus reloaded"
+	@curl -fsS -X POST http://127.0.0.1:9093/-/reload && echo "alertmanager reloaded"
 
 test-postgres: ## Behavioural checks of the adpulse-postgres image (settings, auth, backups)
 	bash scripts/test_postgres_image.sh adpulse-postgres:$(TAG)

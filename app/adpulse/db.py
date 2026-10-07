@@ -29,6 +29,7 @@ class Database:
             open=False,
             # Drop broken connections (e.g. after a DB restart) instead of reusing them.
             check=AsyncConnectionPool.check_connection,
+            reconnect_timeout=settings.db_reconnect_timeout_seconds,
         )
 
     async def open(self) -> None:

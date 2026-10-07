@@ -269,7 +269,8 @@ resource "docker_container" "postgres_exporter" {
   # Talks to Postgres directly (not via Toxiproxy): DB metrics should describe
   # the database, not injected network faults.
   env = [
-    "DATA_SOURCE_URI=postgres-${var.env}:5432/adpulse?sslmode=disable",
+    # connect_timeout keeps a scrape with the DB down well under the 4s scrape timeout.
+    "DATA_SOURCE_URI=postgres-${var.env}:5432/adpulse?sslmode=disable&connect_timeout=2",
     "DATA_SOURCE_USER=adpulse_monitor",
     "DATA_SOURCE_PASS=${var.secrets.db_monitor_password}",
   ]
@@ -306,6 +307,9 @@ resource "docker_container" "redis_exporter" {
   env = [
     "REDIS_ADDR=redis://redis-${var.env}:6379",
     "REDIS_PASSWORD=${var.secrets.redis_password}",
+    # Default 15s: with Redis down a scrape took 9.5s > Prometheus' 4s timeout,
+    # so redis_up==0 was never seen and AdPulseCacheDown could not fire.
+    "REDIS_EXPORTER_CONNECTION_TIMEOUT=2s",
   ]
   capabilities {
     drop = ["ALL"]
