@@ -100,6 +100,15 @@
         name: "openvox-agent={{ openvox_version }}"
         update_cache: true
 
+    - name: Directories for the Puppet and Chef code
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop: [/opt/adpulse, /opt/adpulse/puppet, /opt/adpulse/chef-repo]
+
     - name: Copy the Puppet code
       ansible.posix.synchronize:
         src: "{{ playbook_dir }}/../../config/puppet/"
