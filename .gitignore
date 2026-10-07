@@ -1,0 +1,23 @@
+# Secrets (plan rule R3)
+.env
+*.pem
+*.key
+
+# Terraform state can contain secrets: keep it local only
+*.tfstate*
+.terraform/
+.terraform.lock.hcl.bak
+
+# Python
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Runtime data
+deploy/state/
+incidents/**/raw/
+*.tar.gz
+
+# Plan file (kept local by choice)
+plan.md
