@@ -148,8 +148,13 @@ groups:
 
   - name: adpulse-platform
     rules:
+      # increase() cannot see a counter series that first appears already at 1
+      # (the usual case for an escalation label set), so also fire when a
+      # series with a value > 0 is new within the last 5 minutes.
       - alert: HealerEscalated
-        expr: increase(adpulse_heal_escalations_total[5m]) > 0
+        expr: |
+          increase(adpulse_heal_escalations_total[5m]) > 0
+          or (adpulse_heal_escalations_total > 0 unless adpulse_heal_escalations_total offset 5m)
         for: 0s
         labels:
           severity: critical

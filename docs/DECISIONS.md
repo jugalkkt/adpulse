@@ -284,3 +284,35 @@ Starlette 1.7 warns that `httpx` with its TestClient is deprecated in favour of 
 - **Date:** 2026-10-07
 - **Decision:** Python outside `app/` uses a root `ruff.toml` with the same style (line length 120).
 - **Why:** Otherwise the pre-commit ruff hooks used defaults (line length 88) for scripts and blocked commits.
+
+### D043: The healer reaches Docker only through docker-socket-proxy
+- **Date:** 2026-10-07
+- **Decision:** tecnativa/docker-socket-proxy v0.5.0 (pinned by digest) mounts the Docker socket read-only. It allows only `CONTAINERS, IMAGES, NETWORKS, EXEC, INFO, VERSION, POST`; everything else (volumes, system, build, swarm, secrets, events…) answers **403**, which was verified with `docker volume ls`. It sits on an `internal: true` network shared only with the healer, which uses `DOCKER_HOST=tcp://docker-socket-proxy:2375`.
+- **Why:** Raw socket access equals root on the host. The proxy limits a compromised healer to container operations. The proxy runs as root (it must read the socket) but has no capabilities, a read-only rootfs, and no route out.
+- **Residual risk:** `CONTAINERS + POST` still allows creating containers, and a container could mount host paths. Accepted for the lab and recorded in SECURITY.md (Phase 11). A stricter proxy would filter request bodies.
+- **Alternatives:** Mount `/var/run/docker.sock` directly (the plan's fallback) — rejected.
+
+### D044: The healer runs as the host uid with the adpulse group
+- **Date:** 2026-10-07
+- **Decision:** `user = "<host uid>:10001"`.
+- **Why:** It must write `<repo>/incidents` (heal log, diagnostics) on the host, which is owned by the host user. It must also read `/opt/adpulse`, which Puppet hardened to 0750 adpulse:adpulse; the first attempt as `uid:uid` failed with "uvicorn: not found" (permission denied). Ansible temp dirs are pinned to `/tmp` because uid 1000 maps to the image's `ubuntu` user, whose home is on the read-only rootfs (second live failure).
+
+### D045: Heal playbooks act through Ansible + the docker CLI, never with secrets
+- **Date:** 2026-10-07
+- **Decision:** Restarts use `docker restart` / `docker start` on the existing containers, which keep their config. `scale_api` clones a running replica's image, env and limits, so the healer never needs `.env`. A replica that is gone entirely (removed) cannot be healed: the playbook fails and the healer escalates ("a deploy is needed").
+- **Why:** Least privilege: the healer holds no database or Redis passwords.
+
+### D046: Docker label keys with dots need `.get()` in Jinja
+- **Date:** 2026-10-07
+- **Decision:** Read labels like `c.Labels.get('com.adpulse.replica')`, never with `map(attribute='com.adpulse.replica')`. Use `docker_host_info` with `verbose_output: true`.
+- **Why:** Found by `make test-heal`. `map(attribute=…)` treats the dots as a nested path and silently returned the default, and the non-verbose container summary has no Labels or State at all. That also silently broke the Phase 6 deploy's detection of healer-scaled replicas; it is fixed in `tasks/rolling_update.yml` too.
+
+### D047: HealerEscalated also fires for a brand-new escalation series
+- **Date:** 2026-10-07
+- **Decision:** `increase(x[5m]) > 0 or (x > 0 unless x offset 5m)`, plus `honor_labels: true` on the healer scrape job.
+- **Why:** Three real escalations during development never fired the alert. An escalation label set first appears with value 1, and `increase()` needs a prior sample. And without `honor_labels`, the healer's `env` label was renamed to `exported_env` (the target's `env="monitoring"` won), so the alert would have named the wrong env. promtool test added. Live result: the alert fires 10 s after a failed heal, with env=staging.
+
+### D048: Heal playbooks have their own live test (`make test-heal`)
+- **Date:** 2026-10-07
+- **Decision:** `scripts/test_heal_playbooks.sh` runs all 8 playbooks (11 checks) inside the running healer against staging, under an Alertmanager silence so the live healer doesn't act at the same time.
+- **Why:** Two live-test attempts failed on bugs that a direct test finds in minutes, so each playbook is now proven before relying on the alert chain.
