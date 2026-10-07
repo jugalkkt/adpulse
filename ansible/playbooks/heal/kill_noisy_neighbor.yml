@@ -17,6 +17,7 @@
     - name: Read container labels
       community.docker.docker_host_info:
         containers: true
+        verbose_output: true  # full entries: Labels, State, NetworkSettings
       register: host
 
     - name: Rank eligible containers by CPU

@@ -9,6 +9,7 @@
     - name: List running API replicas
       community.docker.docker_host_info:
         containers: true
+        verbose_output: true  # full entries: Labels, State, NetworkSettings
         containers_filters:
           label:
             - com.adpulse.env={{ env }}
