@@ -335,28 +335,20 @@ class CpuHog(Scenario):
     def inject(self):
         workers = str(os.cpu_count() or 2)
         sh(
-            "docker",
-            "run",
-            "-d",
-            "--rm",
-            "--name",
-            self.container,
-            *CHAOS_LABELS,
-            "--label",
-            f"com.adpulse.env={self.env}",
-            "--memory",
-            "128m",
-            "--read-only",
-            "--security-opt",
-            "no-new-privileges",
-            "--cap-drop",
-            "ALL",
-            "adpulse-chaos-stress:dev",
-            "--cpu",
-            workers,
-            "--timeout",
-            "180s",
-        )
+            "docker", "run", "-d", "--rm", "--name", self.container, *CHAOS_LABELS,
+            "--label", f"com.adpulse.env={self.env}", "--memory", "128m", "--read-only",
+            "--tmpfs", "/tmp:rw,size=16m", "--workdir", "/tmp",  # stress-ng needs a writable temp path
+            "--security-opt", "no-new-privileges", "--cap-drop", "ALL",
+            "adpulse-chaos-stress:dev", "--cpu", workers, "--temp-path", "/tmp", "--timeout", "180s",
+        )  # fmt: skip
+        # Verify the fault really exists: a stressor that exits at once turns the
+        # experiment into a meaningless "not detected" (happened once: read-only rootfs).
+        time.sleep(5)
+        if not sh("docker", "ps", "-q", "--filter", f"name=^{self.container}$", check=False):
+            raise RuntimeError("cpu-hog: stress container is not running; injection failed")
+        cpu = sh("docker", "stats", "--no-stream", "--format", "{{.CPUPerc}}", self.container, check=False)
+        if float(cpu.rstrip("%") or 0) < 100:
+            raise RuntimeError(f"cpu-hog: stress container uses only {cpu} CPU; injection failed")
 
     def remove(self):
         sh("docker", "rm", "-f", self.container, check=False)

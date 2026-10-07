@@ -1,0 +1,17 @@
+ pid  |        state        | wait_event_type | wait_event |   running_for   |                                      query                                       
+------+---------------------+-----------------+------------+-----------------+----------------------------------------------------------------------------------
+ 1622 | idle                | Client          | ClientRead | 00:00:00.268028 | 
+ 3876 | active              |                 |            | 00:00:00        | select pid, state, wait_event_type, wait_event, now() - query_start as running_f
+ 1619 | idle                | Client          | ClientRead | 00:00:00.589867 | 
+   28 | idle                | Client          | ClientRead | 00:00:04.441297 | SELECT * FROM pg_stat_database_conflicts;
+  346 | idle                | Client          | ClientRead | 00:00:00.463813 | 
+ 1616 | idle in transaction | Client          | ClientRead | 00:00:00.172397 |                                                                                 +
+      |                     |                 |            |                 | SELECT a.id, adv.name AS advertiser, a.title, a.image_url, a.click_url, a.bid_c
+ 1624 | idle in transaction | Client          | ClientRead | 00:00:00.031188 | BEGIN
+ 1637 | idle                | Client          | ClientRead | 00:00:00.104639 | ROLLBACK
+ 1641 | idle                | Client          | ClientRead | 00:00:00.286612 | 
+  365 | idle in transaction | Client          | ClientRead | 00:00:00.269864 |                                                                                 +
+      |                     |                 |            |                 | SELECT a.id, adv.name AS advertiser, a.title, a.image_url, a.click_url, a.bid_c
+ 1174 | idle                | Client          | ClientRead | 00:00:00.293838 | 
+ 1120 | idle                | Client          | ClientRead | 00:00:00.112301 | ROLLBACK
+(12 rows)

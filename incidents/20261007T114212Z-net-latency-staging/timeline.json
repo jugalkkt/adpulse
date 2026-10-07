@@ -1,0 +1,43 @@
+{
+  "id": "20261007T114212Z-net-latency-staging",
+  "scenario": "net-latency",
+  "layer": "network",
+  "env": "staging",
+  "description": "Toxiproxy latency toxic 300ms (jitter 100) on the redis proxy (plan's version)",
+  "expected_alert": "AdPulseHighLatencyP95",
+  "expected_heal": "diagnose_latency (human removes the fault)",
+  "human_stop": true,
+  "events": [
+    {
+      "event": "injected",
+      "ts": "2026-10-07T11:42:17.412Z",
+      "t_plus_s": 0.0
+    },
+    {
+      "event": "injection_removed",
+      "ts": "2026-10-07T11:47:18.621Z",
+      "t_plus_s": 301.2
+    },
+    {
+      "event": "alert_resolved",
+      "ts": "2026-10-07T11:47:21.623Z",
+      "t_plus_s": 304.2
+    }
+  ],
+  "other_alerts": [],
+  "mttd_s": null,
+  "mttr_s": null,
+  "heal": [],
+  "probes": {
+    "interval_s": 1,
+    "total": 304,
+    "failed_non_200": 0,
+    "fallback": 0,
+    "slow_over_250ms": 0,
+    "max_latency_s": 0.2361
+  },
+  "window": {
+    "start": "2026-10-07T11:42:17.412Z",
+    "end": "2026-10-07T11:47:21.623Z"
+  }
+}

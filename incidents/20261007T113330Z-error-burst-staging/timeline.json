@@ -1,0 +1,86 @@
+{
+  "id": "20261007T113330Z-error-burst-staging",
+  "scenario": "error-burst",
+  "layer": "software",
+  "env": "staging",
+  "description": "chaos endpoint error_rate 50% on every replica",
+  "expected_alert": "AdPulseHighErrorRate",
+  "expected_heal": "restart_api (rolling)",
+  "human_stop": false,
+  "events": [
+    {
+      "event": "injected",
+      "ts": "2026-10-07T11:33:36.137Z",
+      "t_plus_s": 0.0
+    },
+    {
+      "event": "first_failed_probe",
+      "ts": "2026-10-07T11:33:36.949Z",
+      "t_plus_s": 0.8
+    },
+    {
+      "event": "alert_firing",
+      "ts": "2026-10-07T11:34:50.565Z",
+      "t_plus_s": 74.4
+    },
+    {
+      "event": "heal_started",
+      "ts": "2026-10-07T11:35:00.381Z",
+      "t_plus_s": 84.2
+    },
+    {
+      "event": "recovered",
+      "ts": "2026-10-07T11:35:21.596Z",
+      "t_plus_s": 105.5
+    },
+    {
+      "event": "injection_removed",
+      "ts": "2026-10-07T11:35:21.750Z",
+      "t_plus_s": 105.6
+    },
+    {
+      "event": "heal_finished",
+      "ts": "2026-10-07T11:35:23.031Z",
+      "t_plus_s": 106.9
+    },
+    {
+      "event": "alert_resolved",
+      "ts": "2026-10-07T11:36:10.797Z",
+      "t_plus_s": 154.7
+    }
+  ],
+  "other_alerts": [],
+  "mttd_s": 74.4,
+  "mttr_s": 105.5,
+  "heal": [
+    {
+      "ts": "2026-10-07T11:35:23.031+00:00",
+      "alertname": "AdPulseHighErrorRate",
+      "env": "staging",
+      "fingerprint": "499f262603d9ef1a",
+      "action": "restart_api",
+      "trigger": "firing",
+      "attempt": 1,
+      "result": "success",
+      "duration_s": 22.65,
+      "extra_vars": {
+        "env": "staging",
+        "alertname": "AdPulseHighErrorRate",
+        "mode": "rolling"
+      },
+      "stdout_tail": "*******\nskipping: [localhost]\n\nTASK [Restart or start | api-staging-2] ****************************************\nchanged: [localhost]\n\nTASK [Wait for healthy | api-staging-2] ****************************************\nFAILED - RETRYING: [localhost]: Wait for healthy | api-staging-2 (29 retries left).\nFAILED - RETRYING: [localhost]: Wait for healthy | api-staging-2 (28 retries left).\nok: [localhost]\n\nPLAY RECAP *********************************************************************\nlocalhost                  : ok=12   changed=2    unreachable=0    failed=0    skipped=6    rescued=0    ignored=0   \n\n"
+    }
+  ],
+  "probes": {
+    "interval_s": 1,
+    "total": 108,
+    "failed_non_200": 52,
+    "fallback": 0,
+    "slow_over_250ms": 0,
+    "max_latency_s": 0.0136
+  },
+  "window": {
+    "start": "2026-10-07T11:33:36.137Z",
+    "end": "2026-10-07T11:36:10.797Z"
+  }
+}
