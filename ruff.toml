@@ -11,4 +11,4 @@ ignore = ["S311"]
 "scripts/check_dashboards.py" = ["S310"]  # urlopen on a fixed local Prometheus URL
 "**/tests/**" = ["S101", "S105", "S106"]
 "tools/rca.py" = ["E501", "S310"]  # long Markdown f-strings; urlopen on fixed local Prometheus URL
-"chaos/chaos.py" = ["S310", "S603", "S607", "S108"]  # fixed local URLs; docker CLI argv; /tmp is the stress container's own tmpfs
+"chaos/chaos.py" = ["S310", "S603", "S607", "S108", "S602"]  # fixed local URLs; docker CLI argv; /tmp is the stress container's own tmpfs

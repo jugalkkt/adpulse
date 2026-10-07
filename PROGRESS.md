@@ -353,7 +353,24 @@ Raw logs of the failed attempts are kept in `incidents/raw/` (gitignored).
 - Q9: port 80 + 22 from **[redacted]/32** only (likely a campus-shared IP).
 - 12.7: `infra/terraform/aws` (provider aws 6.67.0). Q10 approved. The first apply stopped (SG description had an apostrophe; 6 free resources created). Fixed, re-planned (5 to add), **Q10 approved again**, applied.
 - Verified: SSH OK, Python 3.12.3, 2 vCPU, 3.7 GiB, 19 GB disk, **IMDSv1 → 401** (IMDSv2 only).
-- Next: Puppet `adpulse::host`, Chef `adpulse_db::host`, Ansible `aws_bootstrap.yml` + `aws_push_images.yml`, Terraform `envs/aws` (docker over SSH), deploy, verify, screenshots, **teardown**.
+- 12.8 `make aws-bootstrap` (`ansible/playbooks/aws_bootstrap.yml`):
+  - Docker 29.8.2 (key fingerprint checked; json logs capped).
+  - **Puppet adpulse::host** applied (deploy user with key only, sshd no root and no password, ufw 22/80 allowed then enabled, unattended-upgrades, sysctl, journald 200M, report).
+  - New SSH sessions as ubuntu and adpulse OK; password login refused.
+  - **noop re-run: 0 changes** (exit 0).
+  - Cinc 19.3.14 (sha256 checked) → **adpulse_db::host second converge 0/3 resources updated**.
+  - First attempt failed (rsync parent dir missing) → fixed.
+- 12.9 `make aws-push-images TAG=76a5798`: 255 MB bundle (save | gzip -1 → copy → load) in 67 s; 3 tags verified on the VM.
+- 12.10 `infra/terraform/envs/aws` (same adpulse_stack + monitoring_stack modules; docker provider over SSH).
+  - The provider download from GitHub release assets timed out (campus network), so init used the local copy (`-plugin-dir`, same lock hashes).
+  - Q10 approved → 36 added in 61 s. **Docker-over-SSH worked first time (no fallback needed).**
+- `make aws-deploy TAG=76a5798`: migrations 001/002 applied, 2 replicas (readiness gate), failed=0. Smoke from the laptop over the internet: **4/4 PASS** (p95 98 ms). All 17 containers healthy on the VM.
+- 12.11 verify:
+  - SSH tunnel (local 19090/19093/13000 → VM 9090/9093/3000): **9/9 Prometheus targets up**, Grafana 200.
+  - Finding: at first bring-up, ApiReplicaDown fired before the first deploy existed, and the healer correctly escalated (`replicas=[]`). Action: silence API alerts on a brand-new env until its first deploy.
+  - Chaos on aws-prod (`--confirm-prod`; the guard refused without it): **replica-down MTTD 28.9 s / MTTR 52.1 s, 0 failed**; **db-down MTTD 20.9 s / MTTR 40.2 s, 0 failed, 13.5% house ads API-side**. RCAs written; SUMMARY.md has 16 rows.
+  - The chaos/RCA tools now take env-var overrides for remote envs (ALERTMANAGER_URL, PROMETHEUS_URL, ADPULSE_URL_<ENV>, HEAL_LOG_CMD, DOCKER_HOST).
+- Next: 🧑 12.12 screenshots, then **12.13 TEARDOWN** (envs/aws destroy → aws destroy → verify empty → delete access key).
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.

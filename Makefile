@@ -267,7 +267,14 @@ aws-stack-up: ## Apply the SAVED stack.tfplan (asks first; R4)
 
 aws-deploy: aws-inventory ## Rolling deploy of the API to aws-prod + smoke test (TAG)
 	$(AWS_PLAYBOOK) playbooks/deploy.yml -e env=aws-prod -e image_tag=$(TAG)
-	DOCKER_HOST=ssh://ubuntu@$$($(AWS_TF) output -raw public_ip) bash scripts/smoke_test.sh aws-prod http://$$($(AWS_TF) output -raw public_ip)
+	$(AWS_SMOKE)
+
+# The docker CLI's SSH transport can't take a key option: load the key into a
+# short-lived ssh-agent just for this command (no change to ~/.ssh/config).
+AWS_SMOKE = ip=$$($(AWS_TF) output -raw public_ip); ssh-agent bash -c "ssh-add -q ~/.ssh/adpulse_aws && DOCKER_HOST=ssh://ubuntu@$$ip bash scripts/smoke_test.sh aws-prod http://$$ip"
+
+aws-smoke: ## Smoke test aws-prod from the laptop
+	$(AWS_SMOKE)
 
 aws-down: ## Destroy everything on AWS (asks first)
 	$(call todo,Phase 12)

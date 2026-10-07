@@ -1,0 +1,81 @@
+{
+  "id": "20261007T155836Z-replica-down-aws-prod",
+  "scenario": "replica-down",
+  "layer": "software",
+  "env": "aws-prod",
+  "description": "docker stop api-<env>-1 (manual stop: Docker's restart policy will not restart it)",
+  "expected_alert": "AdPulseApiReplicaDown",
+  "expected_heal": "restart_api",
+  "human_stop": false,
+  "events": [
+    {
+      "event": "injected",
+      "ts": "2026-10-07T15:58:42.850Z",
+      "t_plus_s": 0.0
+    },
+    {
+      "event": "alert_firing",
+      "ts": "2026-10-07T15:59:11.793Z",
+      "t_plus_s": 28.9
+    },
+    {
+      "event": "heal_started",
+      "ts": "2026-10-07T15:59:20.442Z",
+      "t_plus_s": 37.6
+    },
+    {
+      "event": "heal_finished",
+      "ts": "2026-10-07T15:59:32.102Z",
+      "t_plus_s": 49.3
+    },
+    {
+      "event": "recovered",
+      "ts": "2026-10-07T15:59:34.952Z",
+      "t_plus_s": 52.1
+    },
+    {
+      "event": "injection_removed",
+      "ts": "2026-10-07T15:59:35.731Z",
+      "t_plus_s": 52.9
+    },
+    {
+      "event": "alert_resolved",
+      "ts": "2026-10-07T16:00:11.406Z",
+      "t_plus_s": 88.6
+    }
+  ],
+  "other_alerts": [],
+  "mttd_s": 28.9,
+  "mttr_s": 52.1,
+  "heal": [
+    {
+      "ts": "2026-10-07T15:59:32.102+00:00",
+      "alertname": "AdPulseApiReplicaDown",
+      "env": "aws-prod",
+      "fingerprint": "b33d3a5302f7bce8",
+      "action": "restart_api",
+      "trigger": "firing",
+      "attempt": 2,
+      "result": "success",
+      "duration_s": 11.66,
+      "extra_vars": {
+        "env": "aws-prod",
+        "alertname": "AdPulseApiReplicaDown",
+        "reason": "missing"
+      },
+      "stdout_tail": "*****\nskipping: [localhost]\n\nTASK [Restart or start | api-aws-prod-1] ***************************************\nchanged: [localhost]\n\nTASK [Wait for healthy | api-aws-prod-1] ***************************************\nFAILED - RETRYING: [localhost]: Wait for healthy | api-aws-prod-1 (29 retries left).\nFAILED - RETRYING: [localhost]: Wait for healthy | api-aws-prod-1 (28 retries left).\nok: [localhost]\n\nPLAY RECAP *********************************************************************\nlocalhost                  : ok=8    changed=1    unreachable=0    failed=0    skipped=5    rescued=0    ignored=0   \n\n"
+    }
+  ],
+  "probes": {
+    "interval_s": 1,
+    "total": 56,
+    "failed_non_200": 0,
+    "fallback": 0,
+    "slow_over_250ms": 0,
+    "max_latency_s": 0.1226
+  },
+  "window": {
+    "start": "2026-10-07T15:58:42.850Z",
+    "end": "2026-10-07T16:00:11.406Z"
+  }
+}

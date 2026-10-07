@@ -20,7 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RCA_DIR = ROOT / "docs" / "rca"
-PROM = "http://127.0.0.1:9090"
+PROM = __import__("os").environ.get("PROMETHEUS_URL", "http://127.0.0.1:9090")
 TODO = "_TODO: written from the recorded data below._"
 
 

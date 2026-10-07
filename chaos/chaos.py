@@ -31,9 +31,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 INCIDENTS = ROOT / "incidents"
 HEAL_LOG = INCIDENTS / "heal-log.jsonl"
-ALERTMANAGER = "http://127.0.0.1:9093"
-PROMETHEUS = "http://127.0.0.1:9090"
+# Overridable for remote envs (aws-prod: SSH tunnel + DOCKER_HOST=ssh://...):
+#   ALERTMANAGER_URL, PROMETHEUS_URL, ADPULSE_URL_<ENV>, HEAL_LOG_CMD
+ALERTMANAGER = os.environ.get("ALERTMANAGER_URL", "http://127.0.0.1:9093")
+PROMETHEUS = os.environ.get("PROMETHEUS_URL", "http://127.0.0.1:9090")
 NGINX_PORT = {"staging": 8081, "prod": 8080}
+
+
+def base_url(env: str) -> str:
+    override = os.environ.get("ADPULSE_URL_" + env.upper().replace("-", "_"))
+    return override.rstrip("/") if override else f"http://127.0.0.1:{NGINX_PORT[env]}"
+
+
 GOOD_LATENCY_S = 0.25
 CHAOS_LABELS = ["--label", "com.adpulse.project=adpulse", "--label", "com.adpulse.role=chaos"]
 
@@ -159,7 +168,7 @@ class Probe:
         self._stop.set()
 
     def _run(self) -> None:
-        url = f"http://127.0.0.1:{NGINX_PORT[self.env]}/v1/ad?category=tech&segment=student"
+        url = f"{base_url(self.env)}/v1/ad?category=tech&segment=student"
         with self.path.open("a") as f:
             while not self._stop.is_set():
                 t0 = now()
@@ -500,11 +509,17 @@ def remove_toxics(env: str) -> list[str]:
 
 
 # ---------------------------------------------------------------- run
+def heal_log_text() -> str:
+    cmd = os.environ.get("HEAL_LOG_CMD")  # e.g. "ssh ... cat /opt/adpulse-repo/incidents/heal-log.jsonl"
+    if cmd:
+        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)  # noqa: S602 - operator-set
+        return r.stdout
+    return HEAL_LOG.read_text() if HEAL_LOG.exists() else ""
+
+
 def heal_entries_since(ts: float, env: str, alertname: str) -> list[dict]:
-    if not HEAL_LOG.exists():
-        return []
     out = []
-    for line in HEAL_LOG.read_text().splitlines():
+    for line in heal_log_text().splitlines():
         try:
             e = json.loads(line)
         except json.JSONDecodeError:
@@ -693,11 +708,11 @@ def main() -> int:
     sub.add_parser("list")
     r = sub.add_parser("run")
     r.add_argument("scenario", choices=sorted(SCENARIOS))
-    r.add_argument("--env", default="staging", choices=["staging", "prod"])
+    r.add_argument("--env", default="staging", choices=["staging", "prod", "aws-prod"])
     r.add_argument("--duration", type=float, default=600, help="max seconds to wait for recovery")
     r.add_argument("--confirm-prod", action="store_true")
     s = sub.add_parser("stop")
-    s.add_argument("--env", default="staging", choices=["staging", "prod"])
+    s.add_argument("--env", default="staging", choices=["staging", "prod", "aws-prod"])
     args = ap.parse_args()
 
     if args.cmd == "list":
