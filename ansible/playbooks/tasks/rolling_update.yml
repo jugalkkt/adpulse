@@ -1,0 +1,27 @@
+# Roll every replica of the env to deploy_tag, one at a time.
+# Replicas: 1..env_cfg.replicas plus any extra ones the healer scaled up.
+- name: List current API replicas
+  community.docker.docker_host_info:
+    containers: true
+    containers_all: true
+    containers_filters:
+      label:
+        - com.adpulse.env={{ env }}
+        - com.adpulse.role=api
+  register: api_containers
+
+- name: Work out which replica indexes to roll
+  ansible.builtin.set_fact:
+    replica_indexes: >-
+      {{ (range(1, env_cfg.replicas + 1) | list
+          + (api_containers.containers | map(attribute='Labels') | map(attribute='com.adpulse.replica', default='0')
+             | map('int') | select('gt', 0) | list))
+         | unique | sort }}
+
+- name: Roll replicas one at a time
+  ansible.builtin.include_tasks: replica.yml
+  vars:
+    replica_name: "api-{{ env }}-{{ replica_index }}"
+  loop: "{{ replica_indexes }}"
+  loop_control:
+    loop_var: replica_index

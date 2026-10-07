@@ -1,0 +1,30 @@
+# Shared variables. Select the environment with -e env=staging|prod.
+repo_root: "{{ playbook_dir | dirname | dirname }}"
+env_file: "{{ repo_root }}/.env"
+state_dir: "{{ repo_root }}/deploy/state"
+alertmanager_url: http://127.0.0.1:9093
+
+# Per-environment settings (keys must match the Terraform envs).
+envs:
+  staging:
+    nginx_port: 8081
+    chaos_enabled: true
+    replicas: 2
+  prod:
+    nginx_port: 8080
+    chaos_enabled: false
+    replicas: 2
+
+env_cfg: "{{ envs[env] }}"
+secret_prefix: "{{ env | upper | replace('-', '_') }}"
+network: "adpulse-{{ env }}"
+
+api_image: adpulse-api
+api_limits:
+  memory: 256m
+  cpus: 0.5
+api_health_timeout_s: 60
+
+# Alerts that a deploy silences (the healer must not fight a rolling update).
+deploy_silenced_alerts: "AdPulseApiReplicaDown|AdPulseHighErrorRate|AdPulseHighLatencyP95|AdPulseServingFallbackAds|ApiContainerHighCPU|ApiContainerMemoryHigh"
+deploy_silence_minutes: 5

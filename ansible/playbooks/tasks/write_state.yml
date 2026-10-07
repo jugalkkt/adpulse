@@ -1,0 +1,5 @@
+- name: Write deploy state for {{ env }}
+  ansible.builtin.copy:
+    dest: "{{ state_dir }}/{{ env }}.json"
+    mode: "0640"
+    content: "{{ new_state | to_nice_json }}\n"

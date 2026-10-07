@@ -1,0 +1,12 @@
+# Run migrations only: make migrate ENV=staging TAG=<sha>
+- name: Migrate AdPulse database
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Load secrets
+      ansible.builtin.include_tasks: tasks/load_secrets.yml
+
+    - name: Migrate
+      ansible.builtin.include_tasks: tasks/migrate.yml
+      vars:
+        deploy_tag: "{{ image_tag }}"

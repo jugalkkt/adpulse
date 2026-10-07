@@ -13,7 +13,7 @@ define todo
 	@echo "make $@: not implemented yet ($(1))" >&2; exit 1
 endef
 
-.PHONY: check-env plan-infra plan-monitoring lint-terraform help check secrets build build-base build-api build-postgres lock lint lint-puppet lint-chef lint-app tools-puppet test test-postgres scan infra monitoring deploy rollback status \
+.PHONY: migrate smoke lint-ansible check-env plan-infra plan-monitoring lint-terraform help check secrets build build-base build-api build-postgres lock lint lint-puppet lint-chef lint-app tools-puppet test test-postgres scan infra monitoring deploy rollback status \
         up down chaos chaos-stop rca aws-plan aws-up aws-bootstrap aws-deploy aws-down urls
 
 help: ## List targets
@@ -47,7 +47,7 @@ lock: ## Re-lock Python dependencies with hashes (app/requirements*.in -> .txt)
 	  for f in requirements requirements-dev; do \
 	    /tmp/v/bin/pip-compile -q --generate-hashes --allow-unsafe --strip-extras --no-header -o $$f.txt $$f.in; done'
 
-lint: lint-puppet lint-chef lint-app lint-terraform ## Run all linters
+lint: lint-puppet lint-chef lint-app lint-terraform lint-ansible ## Run all linters
 
 CINC_WORKSTATION := cincproject/workstation:26.3.0@sha256:b19f9949b1012e5a9cd93b68ee1d00b705fc66e1d47f4283471cddf293500830
 
@@ -101,14 +101,29 @@ lint-terraform: ## terraform fmt -check and validate in every root
 	@for d in infra/terraform/envs/local infra/terraform/monitoring/local; do \
 	  terraform -chdir=$$d init -input=false -backend=false >/dev/null && TF_WORKSPACE=staging terraform -chdir=$$d validate -no-color || exit 1; done
 
-deploy: ## Ansible rolling deploy: ENV=staging|prod TAG=<sha>
-	$(call todo,Phase 6)
+ANSIBLE_PLAYBOOK := cd ansible && ANSIBLE_CONFIG=ansible.cfg ansible-playbook
 
-rollback: ## Ansible rollback to the previous tag: ENV=staging|prod
-	$(call todo,Phase 6)
+deploy: check-env ## Ansible rolling deploy: ENV=staging|prod TAG=<sha>
+	$(ANSIBLE_PLAYBOOK) playbooks/deploy.yml -e env=$(ENV) -e image_tag=$(TAG)
+
+rollback: check-env ## Ansible rollback to the previous tag: ENV=staging|prod
+	$(ANSIBLE_PLAYBOOK) playbooks/rollback.yml -e env=$(ENV)
+
+migrate: check-env ## Run DB migrations only: ENV=staging|prod TAG=<sha>
+	$(ANSIBLE_PLAYBOOK) playbooks/migrate.yml -e env=$(ENV) -e image_tag=$(TAG)
 
 status: ## Containers, health, tags, firing alerts
-	$(call todo,Phase 6)
+	@docker ps --filter label=com.adpulse.project=adpulse --format 'table {{.Names}}\t{{.Status}}\t{{.Label "com.adpulse.version"}}' | sort
+	@$(ANSIBLE_PLAYBOOK) playbooks/status.yml
+
+smoke: check-env ## Smoke test ENV through nginx
+	bash scripts/smoke_test.sh $(ENV)
+
+# ansible-lint has its own pipx venv; give it the collections bundled with ansible.
+ANSIBLE_COLLECTIONS := $(firstword $(wildcard $(HOME)/.local/share/pipx/venvs/ansible/lib/python3*/site-packages))
+
+lint-ansible: ## ansible-lint
+	cd ansible && ANSIBLE_COLLECTIONS_PATH="$(ANSIBLE_COLLECTIONS)" ansible-lint playbooks/
 
 up: ## From zero to everything running (both envs + monitoring)
 	$(call todo,Phase 6-8)

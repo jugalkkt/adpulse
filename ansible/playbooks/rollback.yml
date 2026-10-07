@@ -1,0 +1,42 @@
+# Roll back to the previous release: make rollback ENV=staging
+- name: Roll back AdPulse API
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Load secrets
+      ansible.builtin.include_tasks: tasks/load_secrets.yml
+
+    - name: Read state
+      ansible.builtin.include_tasks: tasks/read_state.yml
+
+    - name: Check there is a previous release
+      ansible.builtin.assert:
+        that: (deploy_state.previous | default('')) | length > 0
+        fail_msg: "No previous release recorded in deploy/state/{{ env }}.json"
+        quiet: true
+
+    - name: Silence API alerts
+      ansible.builtin.include_tasks: tasks/silence_create.yml
+      vars:
+        silence_comment: "rollback to {{ deploy_state.previous }}"
+
+    - name: Roll back
+      block:
+        # No down-migrations: migrations are additive (expand/contract), so the
+        # previous release runs fine on the newer schema (DECISIONS D030).
+        - name: Rolling update to the previous release
+          ansible.builtin.include_tasks: tasks/rolling_update.yml
+          vars:
+            deploy_tag: "{{ deploy_state.previous }}"
+
+        - name: Record the rollback
+          ansible.builtin.include_tasks: tasks/write_state.yml
+          vars:
+            new_state:
+              current: "{{ deploy_state.previous }}"
+              previous: "{{ deploy_state.current }}"
+              deployed_at: "{{ lookup('ansible.builtin.pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+              rolled_back_from: "{{ deploy_state.current }}"
+      always:
+        - name: Expire silence
+          ansible.builtin.include_tasks: tasks/silence_expire.yml
