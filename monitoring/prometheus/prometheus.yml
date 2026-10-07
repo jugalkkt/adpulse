@@ -95,5 +95,7 @@ scrape_configs:
       - targets: ["localhost:9090"]
         labels: {env: monitoring}
 
-# The healer job is added in Phase 8, when the healer exists (otherwise
-# TargetMissing would fire for a service that is not deployed yet).
+  - job_name: healer
+    static_configs:
+      - targets: ["healer:9100"]
+        labels: {env: monitoring}

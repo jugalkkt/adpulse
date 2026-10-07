@@ -9,4 +9,8 @@ module "monitoring" {
   images                 = var.images
   grafana_admin_password = var.grafana_admin_password
   enable_healer          = var.enable_healer
+  healer_image           = "adpulse-healer:${var.image_tag}"
+  healer_dry_run         = var.healer_dry_run
+  healer_uid             = var.healer_uid
+  grafana_sa_token       = var.grafana_sa_token
 }

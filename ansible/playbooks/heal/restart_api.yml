@@ -1,0 +1,68 @@
+# Heal API replicas.
+#   container=<name>          restart that replica (cAdvisor alerts)
+#   instance=<ip:port>        restart the replica with that IP (hung replica)
+#   reason=missing            start replicas that are stopped
+#   mode=rolling              restart every replica one at a time
+- name: Heal | restart API replicas
+  hosts: localhost
+  gather_facts: false
+  vars:
+    container: ""
+    instance: ""
+    reason: ""
+    mode: ""
+  tasks:
+    - name: List API replicas of the env
+      community.docker.docker_host_info:
+        containers: true
+        containers_all: true
+        containers_filters:
+          label:
+            - com.adpulse.env={{ env }}
+            - com.adpulse.role=api
+      register: api
+
+    - name: Index replicas by name, state and IP
+      ansible.builtin.set_fact:
+        replicas: >-
+          {%- set out = [] -%}
+          {%- for c in api.containers if c.Names[0][1:] is match('^api-' ~ env ~ '-[0-9]+$') -%}
+          {%- set _ = out.append({'name': c.Names[0][1:], 'state': c.State,
+                'ips': c.NetworkSettings.Networks.values() | map(attribute='IPAddress') | list}) -%}
+          {%- endfor -%}
+          {{ out | sort(attribute='name') }}
+
+    - name: Targets | the named container (cAdvisor alerts)
+      ansible.builtin.set_fact:
+        targets: "{{ [container] }}"
+      when: container | length > 0
+
+    - name: Targets | the replica with the alert's IP (hung replica)
+      ansible.builtin.set_fact:
+        targets: "{{ replicas | selectattr('ips', 'contains', instance.split(':')[0]) | map(attribute='name') | list }}"
+      when: targets is not defined and instance | length > 0
+
+    - name: Targets | every replica, one at a time (rolling)
+      ansible.builtin.set_fact:
+        targets: "{{ replicas | map(attribute='name') | list }}"
+      when: targets is not defined and mode == 'rolling'
+
+    - name: Targets | replicas that are not running (missing)
+      ansible.builtin.set_fact:
+        targets: "{{ replicas | rejectattr('state', 'equalto', 'running') | map(attribute='name') | list }}"
+      when: targets is not defined
+
+    - name: Show plan
+      ansible.builtin.debug:
+        msg: "env={{ env }} reason={{ reason }} mode={{ mode }} replicas={{ replicas | map(attribute='name') | list }} targets={{ targets }}"
+
+    - name: Fail when there is nothing to restart
+      ansible.builtin.fail:
+        msg: "No matching replica to restart (instance={{ instance }}, container={{ container }}); a replica may be missing entirely."
+      when: targets | length == 0
+
+    - name: Restart targets one at a time
+      ansible.builtin.include_tasks: tasks/restart_one.yml
+      loop: "{{ targets }}"
+      loop_control:
+        loop_var: target

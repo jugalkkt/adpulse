@@ -18,7 +18,7 @@ define todo
 	@echo "make $@: not implemented yet ($(1))" >&2; exit 1
 endef
 
-.PHONY: dashboards check-dashboards lint-monitoring test-rules reload-monitoring migrate smoke lint-ansible check-env plan-infra plan-monitoring lint-terraform help check secrets build build-base build-api build-postgres lock lint lint-puppet lint-chef lint-app tools-puppet test test-postgres scan infra monitoring deploy rollback status \
+.PHONY: build-healer lock-healer test-healer grafana-token dashboards check-dashboards lint-monitoring test-rules reload-monitoring migrate smoke lint-ansible check-env plan-infra plan-monitoring lint-terraform help check secrets build build-base build-api build-postgres lock lint lint-puppet lint-chef lint-app tools-puppet test test-postgres scan infra monitoring deploy rollback status \
         up down chaos chaos-stop rca aws-plan aws-up aws-bootstrap aws-deploy aws-down urls
 
 help: ## List targets
@@ -30,7 +30,7 @@ check: ## Print the machine report (OS, tools, ports)
 secrets: ## Create .env from .env.example (never overwrites values)
 	@bash scripts/gen_secrets.sh
 
-build: build-base build-api build-postgres ## Build all images tagged with the git SHA and dev
+build: build-base build-api build-postgres build-healer ## Build all images tagged with the git SHA and dev
 
 build-base: ## Build adpulse-base (Ubuntu + Puppet/OpenVox hardening)
 	docker build $(BUILD_FLAGS) --progress=plain \
@@ -41,6 +41,21 @@ build-api: build-base ## Build adpulse-api (FROM adpulse-base:<sha>) and its tes
 	  -f docker/api/Dockerfile --target runtime -t adpulse-api:$(TAG) -t adpulse-api:dev .
 	docker build $(BUILD_FLAGS) -q --build-arg BASE_IMAGE=adpulse-base:$(TAG) --build-arg GIT_SHA=$(TAG) \
 	  -f docker/api/Dockerfile --target test -t adpulse-api-test:$(TAG) -t adpulse-api-test:dev .
+
+build-healer: build-base ## Build adpulse-healer (FROM adpulse-base) and its test image
+	docker build $(BUILD_FLAGS) --progress=plain --build-arg BASE_IMAGE=adpulse-base:$(TAG) --build-arg GIT_SHA=$(TAG) \
+	  -f docker/healer/Dockerfile --target runtime -t adpulse-healer:$(TAG) -t adpulse-healer:dev .
+	docker build $(BUILD_FLAGS) -q --build-arg BASE_IMAGE=adpulse-base:$(TAG) --build-arg GIT_SHA=$(TAG) \
+	  -f docker/healer/Dockerfile --target test -t adpulse-healer-test:$(TAG) -t adpulse-healer-test:dev .
+
+lock-healer: ## Re-lock healer Python dependencies with hashes
+	docker run --rm --user "$$(id -u):$$(id -g)" -e HOME=/tmp -e PIP_DEFAULT_TIMEOUT=120 -v "$(CURDIR)/healer:/w" -w /w adpulse-base:dev bash -euo pipefail -c '\
+	  python3 -m venv /tmp/v && /tmp/v/bin/pip install -q pip-tools==7.6.2 && \
+	  for f in requirements requirements-dev; do \
+	    /tmp/v/bin/pip-compile -q --generate-hashes --allow-unsafe --strip-extras --no-header -o $$f.txt $$f.in; done'
+
+test-healer: ## Healer unit tests + ruff (inside the healer test image)
+	docker run --rm --network none --read-only --tmpfs /tmp adpulse-healer-test:$(TAG)
 
 build-postgres: ## Build adpulse-postgres (Postgres + Chef/Cinc config + backup scripts)
 	docker build $(BUILD_FLAGS) --progress=plain \
@@ -104,6 +119,7 @@ test: ## Unit + integration tests (throwaway Postgres/Redis via compose)
 	rc=0; TAG=$(TAG) docker compose -f app/tests/compose.test.yml run --rm tests || rc=$$?; \
 	  TAG=$(TAG) docker compose -f app/tests/compose.test.yml down -v --remove-orphans; exit $$rc
 	$(MAKE) --no-print-directory test-rules
+	$(MAKE) --no-print-directory test-healer
 
 scan: ## Trivy image/config scans and gitleaks
 	$(call todo,Phase 11)
@@ -117,11 +133,17 @@ infra: check-env ## Terraform apply for ENV=staging|prod (images for TAG must be
 plan-infra: check-env ## Terraform plan for ENV=staging|prod
 	bash scripts/terraform.sh env $(ENV) plan -input=false -var-file=$(ENV).tfvars -var image_tag=$(TAG)
 
-monitoring: ## Terraform apply for the monitoring stack
-	bash scripts/terraform.sh monitoring apply -input=false -auto-approve
+HEALER_DRY_RUN ?= false
+
+grafana-token: ## Create/refresh the healer's Grafana service-account token in .env
+	bash scripts/grafana_token.sh
+
+monitoring: ## Terraform apply for the monitoring stack (incl. healer)
+	bash scripts/grafana_token.sh
+	bash scripts/terraform.sh monitoring apply -input=false -auto-approve -var image_tag=$(TAG) -var healer_dry_run=$(HEALER_DRY_RUN)
 
 plan-monitoring: ## Terraform plan for the monitoring stack
-	bash scripts/terraform.sh monitoring plan -input=false
+	bash scripts/terraform.sh monitoring plan -input=false -var image_tag=$(TAG) -var healer_dry_run=$(HEALER_DRY_RUN)
 
 lint-terraform: ## terraform fmt -check and validate in every root
 	terraform fmt -check -recursive infra/terraform
@@ -170,7 +192,7 @@ down: ## Destroy local stacks (asks first; label-scoped)
 	-docker ps -aq --filter label=com.adpulse.project=adpulse --filter label=com.adpulse.role=api | xargs -r docker rm -f
 	bash scripts/terraform.sh env staging destroy -input=false -auto-approve -var-file=staging.tfvars -var image_tag=$(TAG)
 	bash scripts/terraform.sh env prod destroy -input=false -auto-approve -var-file=prod.tfvars -var image_tag=$(TAG)
-	bash scripts/terraform.sh monitoring destroy -input=false -auto-approve
+	bash scripts/terraform.sh monitoring destroy -input=false -auto-approve -var image_tag=$(TAG)
 
 chaos: ## Run one chaos scenario: SCENARIO=<name> ENV=staging
 	$(call todo,Phase 9)

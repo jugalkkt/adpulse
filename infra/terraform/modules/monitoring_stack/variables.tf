@@ -37,9 +37,39 @@ variable "grafana_admin_password" {
 }
 
 variable "enable_healer" {
-  description = "Create the healer container (Phase 8)."
+  description = "Create the healer and its docker-socket-proxy (Phase 8)."
   type        = bool
   default     = false
+}
+
+variable "healer_image" {
+  description = "Locally built healer image (adpulse-healer:<sha>)."
+  type        = string
+  default     = ""
+}
+
+variable "socket_proxy_image" {
+  type    = string
+  default = "tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459"
+}
+
+variable "healer_dry_run" {
+  description = "Log intended heal actions without running them."
+  type        = bool
+  default     = false
+}
+
+variable "healer_uid" {
+  description = "uid the healer runs as; must be able to write <repo>/incidents on the host (the host user's uid)."
+  type        = number
+  default     = 1000
+}
+
+variable "grafana_sa_token" {
+  description = "Grafana service-account token for heal annotations (scripts/grafana_token.sh)."
+  type        = string
+  default     = ""
+  sensitive   = true
 }
 
 variable "limits" {

@@ -1,0 +1,23 @@
+# Restart (or start) one container and wait for Docker health. Var: target
+- name: Inspect | {{ target }}
+  community.docker.docker_container_info:
+    name: "{{ target }}"
+  register: before
+
+- name: Fail if the container does not exist | {{ target }}
+  ansible.builtin.fail:
+    msg: "{{ target }} does not exist; a deploy (make deploy) is needed to recreate it."
+  when: not before.exists
+
+- name: Restart or start | {{ target }}
+  ansible.builtin.command:
+    argv: "{{ ['docker', 'restart', '-t', '10', target] if before.container.State.Running else ['docker', 'start', target] }}"
+  changed_when: true
+
+- name: Wait for healthy | {{ target }}
+  community.docker.docker_container_info:
+    name: "{{ target }}"
+  register: after
+  until: after.container.State.Health.Status | default('healthy') == 'healthy'
+  retries: 30
+  delay: 2

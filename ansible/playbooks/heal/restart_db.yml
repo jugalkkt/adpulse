@@ -1,0 +1,38 @@
+# Heal PostgreSQL: start or restart postgres-<env>, wait for pg_isready, then
+# confirm the API is ready again (DB pool reconnected).
+- name: Heal | restart database
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Restart or start postgres
+      ansible.builtin.include_tasks: tasks/restart_one.yml
+      vars:
+        target: "postgres-{{ env }}"
+
+    - name: Wait for pg_isready
+      ansible.builtin.command: docker exec postgres-{{ env }} pg_isready -q -U postgres
+      register: ready
+      until: ready.rc == 0
+      retries: 30
+      delay: 2
+      changed_when: false
+
+    - name: Find a running API replica
+      community.docker.docker_host_info:
+        containers: true
+        containers_filters:
+          label:
+            - com.adpulse.env={{ env }}
+            - com.adpulse.role=api
+          status: running
+      register: api
+
+    - name: Wait until the API reports ready (/readyz 200)
+      ansible.builtin.command:
+        argv: [docker, exec, "{{ api.containers[0].Names[0][1:] }}", curl, -s, -o, /dev/null, -w, "%{http_code}", "http://127.0.0.1:8000/readyz"]
+      register: readyz
+      until: readyz.stdout == '200'
+      retries: 30
+      delay: 2
+      changed_when: false
+      when: api.containers | length > 0
