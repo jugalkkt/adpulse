@@ -38,3 +38,5 @@ RUN --mount=type=bind,source=config/puppet,target=/puppet,readonly \
     /usr/local/sbin/adpulse-fs-hardening check
 
 WORKDIR /opt/adpulse
+# Non-root by default (Trivy DS-0002); derived images switch to root only for install steps.
+USER adpulse

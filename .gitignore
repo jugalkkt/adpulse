@@ -21,3 +21,6 @@ incidents/**/raw/
 
 # Plan file (kept local by choice)
 plan.md
+
+# Generated SBOMs (make sbom; CI uploads them as an artifact)
+sbom/

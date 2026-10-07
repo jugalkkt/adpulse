@@ -21,6 +21,8 @@ ENV PATH="/opt/adpulse/venv/bin:${PATH}" \
     BROKEN_RELEASE="${BROKEN_RELEASE}"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+# The base image defaults to the adpulse user; install steps need root.
+USER root
 
 COPY app/requirements.txt /tmp/requirements.txt
 # Hash-checked install; pip is removed afterwards (not needed at runtime).

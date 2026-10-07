@@ -41,4 +41,7 @@ RUN --mount=type=bind,source=config/chef,target=/chef,readonly \
     # postgres as uid 999, so it is dead code (and carried CVE-2025-68121).
     rm -f /usr/local/bin/gosu
 
+# Non-root by default (Trivy DS-0002); AdPulse always runs it as uid 999 anyway.
+USER postgres
+
 CMD ["postgres", "-c", "config_file=/etc/adpulse-db/postgresql.conf", "-c", "hba_file=/etc/adpulse-db/pg_hba.conf"]

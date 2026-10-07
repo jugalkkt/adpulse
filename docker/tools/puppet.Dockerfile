@@ -22,5 +22,8 @@ RUN set -eux; \
     /opt/puppetlabs/puppet/bin/gem install --no-document puppet-lint -v "${PUPPET_LINT_VERSION}"; \
     rm -rf /var/lib/apt/lists/* /tmp/*
 
-ENV PATH="/opt/puppetlabs/puppet/bin:/opt/puppetlabs/bin:${PATH}"
+ENV PATH="/opt/puppetlabs/puppet/bin:/opt/puppetlabs/bin:${PATH}" \
+    HOME=/tmp
 WORKDIR /work
+# Lint runs unprivileged (Trivy DS-0002); Puppet keeps its scratch files under $HOME=/tmp.
+USER nobody
