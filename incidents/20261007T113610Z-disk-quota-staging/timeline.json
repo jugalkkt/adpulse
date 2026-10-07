@@ -1,0 +1,85 @@
+{
+  "id": "20261007T113610Z-disk-quota-staging",
+  "scenario": "disk-quota",
+  "layer": "trend / capacity",
+  "env": "staging",
+  "description": "write 20 MB junk files every 15s into backups-<env> (stops once the healer has acted)",
+  "expected_alert": "BackupQuotaWillFillSoon",
+  "expected_heal": "cleanup_backups",
+  "human_stop": false,
+  "events": [
+    {
+      "event": "injected",
+      "ts": "2026-10-07T11:36:16.056Z",
+      "t_plus_s": 0.0
+    },
+    {
+      "event": "alert_firing",
+      "ts": "2026-10-07T11:38:33.360Z",
+      "t_plus_s": 137.3
+    },
+    {
+      "event": "heal_started",
+      "ts": "2026-10-07T11:38:43.238Z",
+      "t_plus_s": 147.2
+    },
+    {
+      "event": "heal_finished",
+      "ts": "2026-10-07T11:38:46.008Z",
+      "t_plus_s": 150.0
+    },
+    {
+      "event": "injection_stopped",
+      "ts": "2026-10-07T11:38:46.750Z",
+      "t_plus_s": 150.7
+    },
+    {
+      "event": "recovered",
+      "ts": "2026-10-07T11:42:09.049Z",
+      "t_plus_s": 353.0
+    },
+    {
+      "event": "injection_removed",
+      "ts": "2026-10-07T11:42:09.154Z",
+      "t_plus_s": 353.1
+    },
+    {
+      "event": "alert_resolved",
+      "ts": "2026-10-07T11:42:12.156Z",
+      "t_plus_s": 356.1
+    }
+  ],
+  "other_alerts": [],
+  "mttd_s": 137.3,
+  "mttr_s": 353.0,
+  "heal": [
+    {
+      "ts": "2026-10-07T11:38:46.008+00:00",
+      "alertname": "BackupQuotaWillFillSoon",
+      "env": "staging",
+      "fingerprint": "40ae0d7913cbf35d",
+      "action": "cleanup_backups",
+      "trigger": "firing",
+      "attempt": 1,
+      "result": "success",
+      "duration_s": 2.77,
+      "extra_vars": {
+        "env": "staging",
+        "alertname": "BackupQuotaWillFillSoon"
+      },
+      "stdout_tail": "Heal | clean up backups] *************************************************\n\nTASK [Enforce retention and quota inside backup-agent-staging] *****************\nchanged: [localhost]\n\nTASK [Result] ******************************************************************\nok: [localhost] => \n    msg: '{\"junk_removed\":10,\"retention_removed\":0,\"quota_removed\":0,\"bytes_before\":212420899,\"bytes_after\":12420899}'\n\nPLAY RECAP *********************************************************************\nlocalhost                  : ok=2    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   \n\n"
+    }
+  ],
+  "probes": {
+    "interval_s": 1,
+    "total": 356,
+    "failed_non_200": 0,
+    "fallback": 0,
+    "slow_over_250ms": 0,
+    "max_latency_s": 0.0482
+  },
+  "window": {
+    "start": "2026-10-07T11:36:16.056Z",
+    "end": "2026-10-07T11:42:12.156Z"
+  }
+}

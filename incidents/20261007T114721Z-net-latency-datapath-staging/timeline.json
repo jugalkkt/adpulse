@@ -1,0 +1,91 @@
+{
+  "id": "20261007T114721Z-net-latency-datapath-staging",
+  "scenario": "net-latency-datapath",
+  "layer": "network",
+  "env": "staging",
+  "description": "Toxiproxy latency toxic 300ms (jitter 100) on BOTH the redis and postgres proxies",
+  "expected_alert": "AdPulseHighLatencyP95",
+  "expected_heal": "diagnose_latency (human removes the fault)",
+  "human_stop": true,
+  "events": [
+    {
+      "event": "injected",
+      "ts": "2026-10-07T11:47:27.010Z",
+      "t_plus_s": 0.0
+    },
+    {
+      "event": "first_failed_probe",
+      "ts": "2026-10-07T11:47:27.754Z",
+      "t_plus_s": 0.7
+    },
+    {
+      "event": "alert_firing",
+      "ts": "2026-10-07T11:49:41.222Z",
+      "t_plus_s": 134.2
+    },
+    {
+      "event": "heal_started",
+      "ts": "2026-10-07T11:49:50.378Z",
+      "t_plus_s": 143.4
+    },
+    {
+      "event": "heal_finished",
+      "ts": "2026-10-07T11:50:17.538Z",
+      "t_plus_s": 170.5
+    },
+    {
+      "event": "injection_removed",
+      "ts": "2026-10-07T11:50:19.128Z",
+      "t_plus_s": 172.1
+    },
+    {
+      "event": "recovered",
+      "ts": "2026-10-07T11:50:22.418Z",
+      "t_plus_s": 175.4
+    },
+    {
+      "event": "alert_resolved",
+      "ts": "2026-10-07T11:51:21.857Z",
+      "t_plus_s": 234.8
+    }
+  ],
+  "other_alerts": [
+    {
+      "alertname": "AdPulseServingFallbackAds",
+      "first_seen": "2026-10-07T11:48:36.117Z",
+      "t_plus_s": 69.1
+    }
+  ],
+  "mttd_s": 134.2,
+  "mttr_s": 175.4,
+  "heal": [
+    {
+      "ts": "2026-10-07T11:50:17.538+00:00",
+      "alertname": "AdPulseHighLatencyP95",
+      "env": "staging",
+      "fingerprint": "3a37654ab45185bb",
+      "action": "diagnose_latency",
+      "trigger": "firing",
+      "attempt": 1,
+      "result": "success",
+      "duration_s": 27.16,
+      "extra_vars": {
+        "env": "staging",
+        "alertname": "AdPulseHighLatencyP95"
+      },
+      "stdout_tail": "*******************\nok: [localhost]\n\nTASK [Write p95 series] ********************************************************\nchanged: [localhost]\n\nTASK [Report] ******************************************************************\nok: [localhost] => \n    msg: Diagnostics written to /data/diagnostics/20261007T114952Z-staging (no automatic\n        fix for latency; see docs/runbooks/AdPulseHighLatencyP95.md)\n\nPLAY RECAP *********************************************************************\nlocalhost                  : ok=7    changed=3    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   \n\n"
+    }
+  ],
+  "probes": {
+    "interval_s": 1,
+    "total": 152,
+    "failed_non_200": 0,
+    "fallback": 145,
+    "slow_over_250ms": 145,
+    "max_latency_s": 1.8054
+  },
+  "window": {
+    "start": "2026-10-07T11:47:27.010Z",
+    "end": "2026-10-07T11:51:21.857Z"
+  }
+}

@@ -3,9 +3,12 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # incidents/ holds raw evidence (command output): never rewrite it.
       - id: end-of-file-fixer
+        exclude: ^incidents/
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
+        exclude: ^incidents/
       - id: check-yaml
         args: [--allow-multiple-documents]
       - id: check-added-large-files
