@@ -1,0 +1,57 @@
+# Replicas, image tags, health, deploy state and firing alerts: make status
+- name: AdPulse status
+  hosts: localhost
+  gather_facts: false
+  vars:
+    env_list: "{{ [env] if env is defined else envs.keys() | list }}"
+  tasks:
+    - name: List API replicas
+      community.docker.docker_host_info:
+        containers: true
+        containers_all: true
+        containers_filters:
+          label:
+            - com.adpulse.role=api
+      register: api
+
+    - name: Inspect replicas
+      community.docker.docker_container_info:
+        name: "{{ item }}"
+      loop: "{{ api.containers | map(attribute='Names') | map('first') | map('regex_replace', '^/', '') | sort }}"
+      register: replicas
+
+    - name: Read deploy state files
+      ansible.builtin.slurp:
+        src: "{{ state_dir }}/{{ item }}.json"
+      loop: "{{ env_list }}"
+      register: states
+      failed_when: false
+
+    - name: Firing alerts
+      ansible.builtin.uri:
+        url: "{{ alertmanager_url }}/api/v2/alerts?active=true&silenced=false&inhibited=false"
+        timeout: 5
+      register: alerts
+      failed_when: false
+
+    - name: Replicas
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.container.Name | regex_replace('^/', '') }}
+          version={{ item.container.Config.Labels['com.adpulse.version'] | default('?') }}
+          state={{ item.container.State.Status }}
+          health={{ item.container.State.Health.Status | default('none') }}
+      loop: "{{ replicas.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Deploy state
+      ansible.builtin.debug:
+        msg: "{{ item.item }}: {{ item.content | b64decode | from_json }}"
+      loop: "{{ states.results | selectattr('content', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Firing alerts (not silenced or inhibited)
+      ansible.builtin.debug:
+        msg: "{{ (alerts.json | default([])) | map(attribute='labels') | map(attribute='alertname') | list }}"

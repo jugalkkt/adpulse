@@ -1,0 +1,24 @@
+# Silence this env's API alerts for the duration of a deploy/rollback, so the
+# healer never "fixes" a replica that is being replaced on purpose.
+- name: Create Alertmanager silence for {{ env }}
+  ansible.builtin.uri:
+    url: "{{ alertmanager_url }}/api/v2/silences"
+    method: POST
+    body_format: json
+    body:
+      matchers:
+        - { name: env, value: "{{ env }}", isRegex: false, isEqual: true }
+        - { name: alertname, value: "{{ deploy_silenced_alerts }}", isRegex: true, isEqual: true }
+      startsAt: "{{ lookup('ansible.builtin.pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+      endsAt: "{{ lookup('ansible.builtin.pipe', 'date -u -d \"+' ~ deploy_silence_minutes ~ ' min\" +%Y-%m-%dT%H:%M:%SZ') }}"
+      createdBy: ansible-deploy
+      comment: "{{ silence_comment }}"
+    status_code: 200
+    timeout: 5
+  register: silence
+  failed_when: false
+
+- name: Warn if Alertmanager could not be reached (deploy continues)
+  ansible.builtin.debug:
+    msg: "WARNING: no silence created ({{ silence.msg | default('') }}); alerts may fire during the deploy."
+  when: silence.status | default(0) != 200

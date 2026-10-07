@@ -1,0 +1,8 @@
+- name: Expire the deploy silence
+  ansible.builtin.uri:
+    url: "{{ alertmanager_url }}/api/v2/silence/{{ silence.json.silenceID }}"
+    method: DELETE
+    status_code: 200
+    timeout: 5
+  when: silence is defined and silence.status | default(0) == 200
+  failed_when: false

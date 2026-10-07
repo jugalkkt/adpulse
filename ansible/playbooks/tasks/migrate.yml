@@ -1,0 +1,40 @@
+# One-shot migration container on the env network (direct to Postgres, not
+# through Toxiproxy). Idempotent: applied versions live in schema_migrations.
+- name: Run database migrations with {{ deploy_tag }}
+  community.docker.docker_container:
+    name: "migrate-{{ env }}"
+    image: "{{ api_image }}:{{ deploy_tag }}"
+    pull: never
+    command: ["python", "-m", "adpulse.migrate"]
+    detach: false
+    cleanup: true
+    output_logs: true
+    read_only: true
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,size=16m"
+    security_opts:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["NONE"]
+    networks:
+      - name: "{{ network }}"
+    labels:
+      com.adpulse.project: adpulse
+      com.adpulse.env: "{{ env }}"
+      com.adpulse.role: api
+    env:
+      APP_ENV: "{{ env }}"
+      DB_HOST: "postgres-{{ env }}"
+      DB_PORT: "5432"
+      DB_NAME: adpulse
+      DB_USER: adpulse
+      DB_PASSWORD: "{{ db_app_password }}"
+      MIGRATE_WAIT_SECONDS: "60"
+  register: migrate_run
+  no_log: true
+
+- name: Show migration output
+  ansible.builtin.debug:
+    msg: "{{ migrate_run.container.Output | default('') | split('\n') | select | list }}"

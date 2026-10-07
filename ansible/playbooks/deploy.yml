@@ -1,0 +1,70 @@
+# Rolling deploy of the API: make deploy ENV=staging TAG=<sha>
+#   silence alerts -> migrate -> roll replicas -> write state -> expire silence.
+#   If a replica fails its health check, roll back to the previous tag and fail.
+- name: Deploy AdPulse API
+  hosts: localhost
+  gather_facts: false
+  vars:
+    silence_comment: "deploy {{ image_tag }}"
+  tasks:
+    - name: Load secrets
+      ansible.builtin.include_tasks: tasks/load_secrets.yml
+
+    - name: Check image_tag
+      ansible.builtin.assert:
+        that: image_tag is defined and image_tag | length > 0
+        fail_msg: "Pass -e image_tag=<git sha>"
+        quiet: true
+
+    - name: Check that the image exists locally
+      community.docker.docker_image_info:
+        name: "{{ api_image }}:{{ image_tag }}"
+      register: image_info
+      failed_when: image_info.images | length == 0
+
+    - name: Read state
+      ansible.builtin.include_tasks: tasks/read_state.yml
+
+    - name: Silence API alerts
+      ansible.builtin.include_tasks: tasks/silence_create.yml
+
+    - name: Migrate and roll out
+      block:
+        - name: Migrate
+          ansible.builtin.include_tasks: tasks/migrate.yml
+          vars:
+            deploy_tag: "{{ image_tag }}"
+
+        - name: Rolling update
+          ansible.builtin.include_tasks: tasks/rolling_update.yml
+          vars:
+            deploy_tag: "{{ image_tag }}"
+
+        - name: Record the release
+          ansible.builtin.include_tasks: tasks/write_state.yml
+          vars:
+            new_state:
+              current: "{{ image_tag }}"
+              previous: >-
+                {{ deploy_state.current
+                   if (deploy_state.current | default('')) not in ['', image_tag]
+                   else deploy_state.previous | default('') }}
+              deployed_at: "{{ lookup('ansible.builtin.pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+      rescue:
+        - name: Automatic rollback to the last good release
+          ansible.builtin.include_tasks: tasks/rolling_update.yml
+          vars:
+            deploy_tag: "{{ deploy_state.current }}"
+          when: (deploy_state.current | default('')) not in ['', image_tag]
+
+        - name: Fail the deploy
+          ansible.builtin.fail:
+            msg: >-
+              Deploy of {{ image_tag }} to {{ env }} FAILED:
+              {{ ansible_failed_result.msg | default('see above') }}.
+              {{ 'Rolled back to ' ~ deploy_state.current ~ '.'
+                 if (deploy_state.current | default('')) not in ['', image_tag]
+                 else 'No previous release to roll back to.' }}
+      always:
+        - name: Expire silence
+          ansible.builtin.include_tasks: tasks/silence_expire.yml

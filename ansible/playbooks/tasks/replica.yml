@@ -1,0 +1,97 @@
+# Replace ONE replica with image_tag, zero-downtime:
+#   start <name>-next (same network alias) -> wait healthy -> let nginx DNS
+#   (valid=5s) see it -> stop the old one gracefully -> rename next -> <name>.
+# Vars: replica_index, replica_name (api-<env>-<index>), deploy_tag
+- name: "Remove a leftover -next container | {{ replica_name }}"
+  community.docker.docker_container:
+    name: "api-{{ env }}-{{ replica_index }}-next"
+    state: absent
+
+- name: "Start new release next to the old container | {{ replica_name }}"
+  community.docker.docker_container:
+    name: "api-{{ env }}-{{ replica_index }}-next"
+    image: "{{ api_image }}:{{ deploy_tag }}"
+    pull: never
+    state: started
+    restart_policy: unless-stopped
+    read_only: true
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,size=64m"
+    security_opts:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    memory: "{{ api_limits.memory }}"
+    memory_swap: "{{ api_limits.memory }}"
+    cpus: "{{ api_limits.cpus }}"
+    networks:
+      - name: "{{ network }}"
+        aliases:
+          - "api-{{ env }}"
+    labels:
+      com.adpulse.project: adpulse
+      com.adpulse.env: "{{ env }}"
+      com.adpulse.role: api
+      com.adpulse.replica: "{{ replica_index | string }}"
+      com.adpulse.version: "{{ deploy_tag }}"
+    env:
+      APP_ENV: "{{ env }}"
+      DB_HOST: "toxiproxy-{{ env }}"
+      DB_PORT: "15432"
+      DB_NAME: adpulse
+      DB_USER: adpulse
+      DB_PASSWORD: "{{ db_app_password }}"
+      REDIS_HOST: "toxiproxy-{{ env }}"
+      REDIS_PORT: "16379"
+      REDIS_PASSWORD: "{{ redis_password }}"
+      CHAOS_ENABLED: "{{ env_cfg.chaos_enabled | string | lower }}"
+      CHAOS_TOKEN: "{{ chaos_token if env_cfg.chaos_enabled else '' }}"
+      GIT_SHA: "{{ deploy_tag }}"
+      LOG_LEVEL: INFO
+  no_log: true
+
+- name: "Wait for Docker health | {{ replica_name }}"
+  community.docker.docker_container_info:
+    name: "api-{{ env }}-{{ replica_index }}-next"
+  register: next_info
+  until: >-
+    next_info.container.State.Status != 'running'
+    or next_info.container.State.Health.Status in ['healthy', 'unhealthy']
+  retries: "{{ (api_health_timeout_s / 2) | int }}"
+  delay: 2
+
+- name: "Fail and clean up if the new container is not healthy | {{ replica_name }}"
+  when: next_info.container.State.Health.Status | default('none') != 'healthy'
+  block:
+    - name: "Capture logs of the failed container | {{ replica_name }}"
+      ansible.builtin.command: docker logs --tail 20 "api-{{ env }}-{{ replica_index }}-next"
+      register: failed_logs
+      changed_when: false
+      failed_when: false
+
+    - name: "Remove the failed container | {{ replica_name }}"
+      community.docker.docker_container:
+        name: "api-{{ env }}-{{ replica_index }}-next"
+        state: absent
+
+    - name: "Fail | {{ replica_name }}"
+      ansible.builtin.fail:
+        msg: >-
+          api-{{ env }}-{{ replica_index }} with {{ deploy_tag }} did not become healthy
+          (status={{ next_info.container.State.Status }},
+          health={{ next_info.container.State.Health.Status | default('none') }}).
+          Last logs: {{ failed_logs.stdout_lines | default([]) | join(' | ') }}
+
+- name: "Let nginx's DNS cache (valid=5s) see the new container | {{ replica_name }}"
+  ansible.builtin.pause:
+    seconds: 6
+
+- name: "Stop the old container gracefully (uvicorn drains in-flight requests) | {{ replica_name }}"
+  community.docker.docker_container:
+    name: "api-{{ env }}-{{ replica_index }}"
+    state: absent
+    stop_timeout: 15
+
+- name: "Rename -next to the stable name | {{ replica_name }}"
+  ansible.builtin.command: docker rename "api-{{ env }}-{{ replica_index }}-next" "api-{{ env }}-{{ replica_index }}"
+  changed_when: true
