@@ -253,11 +253,21 @@ aws-inventory: ## Write ansible/inventories/aws/hosts.yml from terraform output
 
 AWS_PLAYBOOK := cd ansible && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i inventories/aws/hosts.yml
 
+aws-push-images: aws-inventory ## Ship adpulse images (TAG) to the AWS host: save | gzip -> copy -> load
+	$(AWS_PLAYBOOK) playbooks/aws_push_images.yml -e image_tag=$(TAG)
+
 aws-bootstrap: aws-inventory ## Ansible bootstrap of the AWS host (Docker, Puppet, Chef)
 	$(AWS_PLAYBOOK) playbooks/aws_bootstrap.yml
 
-aws-deploy: ## Deploy the stack to AWS
-	$(call todo,Phase 12)
+aws-stack-plan: ## Terraform plan for the aws-prod stack on the EC2 host (TAG)
+	bash scripts/terraform.sh aws plan -input=false -var image_tag=$(TAG) -out=stack.tfplan
+
+aws-stack-up: ## Apply the SAVED stack.tfplan (asks first; R4)
+	bash scripts/terraform.sh aws apply -input=false stack.tfplan
+
+aws-deploy: aws-inventory ## Rolling deploy of the API to aws-prod + smoke test (TAG)
+	$(AWS_PLAYBOOK) playbooks/deploy.yml -e env=aws-prod -e image_tag=$(TAG)
+	DOCKER_HOST=ssh://ubuntu@$$($(AWS_TF) output -raw public_ip) bash scripts/smoke_test.sh aws-prod http://$$($(AWS_TF) output -raw public_ip)
 
 aws-down: ## Destroy everything on AWS (asks first)
 	$(call todo,Phase 12)

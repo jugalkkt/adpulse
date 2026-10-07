@@ -16,7 +16,7 @@ envval() {
   printf '%s' "$v"
 }
 
-kind="${1:?usage: terraform.sh env <env> ... | monitoring ...}"; shift
+kind="${1:?usage: terraform.sh env <env> ... | monitoring ... | aws ...}"; shift
 
 case "$kind" in
   env)
@@ -31,6 +31,18 @@ case "$kind" in
     export TF_VAR_db_admin_password TF_VAR_db_app_password TF_VAR_db_monitor_password TF_VAR_redis_password
     terraform -chdir="$dir" init -input=false -upgrade=false >/dev/null
     terraform -chdir="$dir" workspace select -or-create "$env" >/dev/null
+    ;;
+  aws)
+    dir="$ROOT/infra/terraform/envs/aws"
+    TF_VAR_db_admin_password="$(envval AWS_PROD_DB_ADMIN_PASSWORD)"
+    TF_VAR_db_app_password="$(envval AWS_PROD_DB_APP_PASSWORD)"
+    TF_VAR_db_monitor_password="$(envval AWS_PROD_DB_MONITOR_PASSWORD)"
+    TF_VAR_redis_password="$(envval AWS_PROD_REDIS_PASSWORD)"
+    TF_VAR_grafana_admin_password="$(envval GRAFANA_ADMIN_PASSWORD)"
+    TF_VAR_host_ip="$(terraform -chdir="$ROOT/infra/terraform/aws" output -raw public_ip)"
+    export TF_VAR_db_admin_password TF_VAR_db_app_password TF_VAR_db_monitor_password TF_VAR_redis_password \
+      TF_VAR_grafana_admin_password TF_VAR_host_ip
+    terraform -chdir="$dir" init -input=false -upgrade=false >/dev/null
     ;;
   monitoring)
     dir="$ROOT/infra/terraform/monitoring/local"

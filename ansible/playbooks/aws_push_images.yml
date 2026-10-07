@@ -1,0 +1,54 @@
+# Ship locally built images to the AWS host without a registry (plan 12.9):
+# docker save | gzip -> copy -> docker load.   make aws-push-images TAG=<sha>
+- name: Push AdPulse images to the AWS host
+  hosts: all
+  gather_facts: false
+  vars:
+    images: [adpulse-postgres, adpulse-api, adpulse-healer]
+    bundle: "adpulse-images-{{ image_tag }}.tar.gz"
+    local_dir: "{{ lookup('ansible.builtin.env', 'TMPDIR') | default('/tmp', true) }}"
+  tasks:
+    - name: Check image_tag
+      ansible.builtin.assert:
+        that: image_tag is defined and image_tag | length > 0
+        quiet: true
+
+    - name: Save and compress the images locally
+      ansible.builtin.shell: |
+        set -o pipefail
+        docker save {% for i in images %}{{ i }}:{{ image_tag }} {% endfor %}| gzip -1 > "{{ local_dir }}/{{ bundle }}"
+      args:
+        executable: /bin/bash
+        creates: "{{ local_dir }}/{{ bundle }}"
+      delegate_to: localhost
+
+    - name: Copy the bundle to the host
+      ansible.builtin.copy:
+        src: "{{ local_dir }}/{{ bundle }}"
+        dest: "/tmp/{{ bundle }}"
+        mode: "0600"
+
+    - name: Load the images
+      ansible.builtin.shell: |
+        set -o pipefail
+        gunzip -c "/tmp/{{ bundle }}" | docker load
+      args:
+        executable: /bin/bash
+      register: loaded
+      changed_when: "'Loaded image' in loaded.stdout"
+
+    - name: Verify every tag exists on the host
+      ansible.builtin.command: docker image inspect --format '{{ "{{" }}.RepoTags{{ "}}" }}' {{ item }}:{{ image_tag }}
+      loop: "{{ images }}"
+      changed_when: false
+
+    - name: Remove the remote bundle
+      ansible.builtin.file:
+        path: "/tmp/{{ bundle }}"
+        state: absent
+
+    - name: Remove the local bundle
+      ansible.builtin.file:
+        path: "{{ local_dir }}/{{ bundle }}"
+        state: absent
+      delegate_to: localhost
