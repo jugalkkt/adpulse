@@ -1,0 +1,2 @@
+postgres	[::]:15432	postgres-staging:5432	enabled	0
+redis	[::]:16379	redis-staging:6379	enabled	0

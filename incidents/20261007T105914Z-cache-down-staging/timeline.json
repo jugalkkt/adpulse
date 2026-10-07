@@ -1,0 +1,80 @@
+{
+  "id": "20261007T105914Z-cache-down-staging",
+  "scenario": "cache-down",
+  "layer": "database (cache)",
+  "env": "staging",
+  "description": "docker stop redis-<env>",
+  "expected_alert": "AdPulseCacheDown",
+  "expected_heal": "restart_cache",
+  "human_stop": false,
+  "events": [
+    {
+      "event": "injected",
+      "ts": "2026-10-07T10:59:19.563Z",
+      "t_plus_s": 0.0
+    },
+    {
+      "event": "alert_firing",
+      "ts": "2026-10-07T10:59:43.593Z",
+      "t_plus_s": 24.0
+    },
+    {
+      "event": "heal_started",
+      "ts": "2026-10-07T10:59:53.238Z",
+      "t_plus_s": 33.7
+    },
+    {
+      "event": "recovered",
+      "ts": "2026-10-07T11:00:03.037Z",
+      "t_plus_s": 43.5
+    },
+    {
+      "event": "injection_removed",
+      "ts": "2026-10-07T11:00:03.056Z",
+      "t_plus_s": 43.5
+    },
+    {
+      "event": "heal_finished",
+      "ts": "2026-10-07T11:00:05.698Z",
+      "t_plus_s": 46.1
+    },
+    {
+      "event": "alert_resolved",
+      "ts": "2026-10-07T11:00:06.058Z",
+      "t_plus_s": 46.5
+    }
+  ],
+  "other_alerts": [],
+  "mttd_s": 24.0,
+  "mttr_s": 43.5,
+  "heal": [
+    {
+      "ts": "2026-10-07T11:00:05.698+00:00",
+      "alertname": "AdPulseCacheDown",
+      "env": "staging",
+      "fingerprint": "0af2926dfcce31cd",
+      "action": "restart_cache",
+      "trigger": "firing",
+      "attempt": 1,
+      "result": "success",
+      "duration_s": 12.46,
+      "extra_vars": {
+        "env": "staging",
+        "alertname": "AdPulseCacheDown"
+      },
+      "stdout_tail": "*******\nskipping: [localhost]\n\nTASK [Restart or start | redis-staging] ****************************************\nchanged: [localhost]\n\nTASK [Wait for healthy | redis-staging] ****************************************\nFAILED - RETRYING: [localhost]: Wait for healthy | redis-staging (29 retries left).\nFAILED - RETRYING: [localhost]: Wait for healthy | redis-staging (28 retries left).\nok: [localhost]\n\nPLAY RECAP *********************************************************************\nlocalhost                  : ok=4    changed=1    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   \n\n"
+    }
+  ],
+  "probes": {
+    "interval_s": 1,
+    "total": 46,
+    "failed_non_200": 0,
+    "fallback": 0,
+    "slow_over_250ms": 0,
+    "max_latency_s": 0.0268
+  },
+  "window": {
+    "start": "2026-10-07T10:59:19.563Z",
+    "end": "2026-10-07T11:00:06.058Z"
+  }
+}

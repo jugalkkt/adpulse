@@ -1,0 +1,86 @@
+{
+  "id": "20261007T105809Z-replica-down-staging",
+  "scenario": "replica-down",
+  "layer": "software",
+  "env": "staging",
+  "description": "docker stop api-<env>-1 (manual stop: Docker's restart policy will not restart it)",
+  "expected_alert": "AdPulseApiReplicaDown",
+  "expected_heal": "restart_api",
+  "human_stop": false,
+  "events": [
+    {
+      "event": "injected",
+      "ts": "2026-10-07T10:58:15.337Z",
+      "t_plus_s": 0.0
+    },
+    {
+      "event": "first_failed_probe",
+      "ts": "2026-10-07T10:58:18.804Z",
+      "t_plus_s": 3.5
+    },
+    {
+      "event": "alert_firing",
+      "ts": "2026-10-07T10:58:35.951Z",
+      "t_plus_s": 20.6
+    },
+    {
+      "event": "heal_started",
+      "ts": "2026-10-07T10:58:45.383Z",
+      "t_plus_s": 30.0
+    },
+    {
+      "event": "recovered",
+      "ts": "2026-10-07T10:58:58.037Z",
+      "t_plus_s": 42.7
+    },
+    {
+      "event": "injection_removed",
+      "ts": "2026-10-07T10:58:58.060Z",
+      "t_plus_s": 42.7
+    },
+    {
+      "event": "heal_finished",
+      "ts": "2026-10-07T10:59:00.793Z",
+      "t_plus_s": 45.5
+    },
+    {
+      "event": "alert_resolved",
+      "ts": "2026-10-07T10:59:07.066Z",
+      "t_plus_s": 51.7
+    }
+  ],
+  "other_alerts": [],
+  "mttd_s": 20.6,
+  "mttr_s": 42.7,
+  "heal": [
+    {
+      "ts": "2026-10-07T10:59:00.793+00:00",
+      "alertname": "AdPulseApiReplicaDown",
+      "env": "staging",
+      "fingerprint": "88d9594c4da905bc",
+      "action": "restart_api",
+      "trigger": "firing",
+      "attempt": 2,
+      "result": "success",
+      "duration_s": 15.41,
+      "extra_vars": {
+        "env": "staging",
+        "alertname": "AdPulseApiReplicaDown",
+        "reason": "missing"
+      },
+      "stdout_tail": "*******\nskipping: [localhost]\n\nTASK [Restart or start | api-staging-1] ****************************************\nchanged: [localhost]\n\nTASK [Wait for healthy | api-staging-1] ****************************************\nFAILED - RETRYING: [localhost]: Wait for healthy | api-staging-1 (29 retries left).\nFAILED - RETRYING: [localhost]: Wait for healthy | api-staging-1 (28 retries left).\nok: [localhost]\n\nPLAY RECAP *********************************************************************\nlocalhost                  : ok=8    changed=1    unreachable=0    failed=0    skipped=5    rescued=0    ignored=0   \n\n"
+    }
+  ],
+  "probes": {
+    "interval_s": 1,
+    "total": 46,
+    "failed_non_200": 0,
+    "fallback": 0,
+    "slow_over_250ms": 2,
+    "max_latency_s": 0.5035
+  },
+  "window": {
+    "start": "2026-10-07T10:58:15.337Z",
+    "end": "2026-10-07T10:59:07.066Z"
+  }
+}

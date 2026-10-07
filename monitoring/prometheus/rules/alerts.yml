@@ -8,6 +8,7 @@ groups:
       - alert: AdPulseApiReplicaDown
         expr: up{job="api"} == 0
         for: 15s
+        keep_firing_for: 30s
         labels:
           severity: critical
           reason: unreachable
@@ -23,6 +24,7 @@ groups:
           env:adpulse_api_replicas_expected:count
           > on (env) (env:adpulse_api_replicas_up:count or env:adpulse_api_replicas_expected:count * 0)
         for: 15s
+        keep_firing_for: 30s
         labels:
           severity: critical
           reason: missing
@@ -68,6 +70,9 @@ groups:
       - alert: AdPulseDatabaseDown
         expr: pg_up == 0
         for: 15s
+        # A scrape that times out (e.g. slow DNS while the container is gone) must not
+        # reset a firing alert: it flapped and never reached the healer (DECISIONS D049).
+        keep_firing_for: 30s
         labels:
           severity: critical
         annotations:
@@ -78,6 +83,9 @@ groups:
       - alert: AdPulseCacheDown
         expr: redis_up == 0
         for: 15s
+        # A scrape that times out (e.g. slow DNS while the container is gone) must not
+        # reset a firing alert: it flapped and never reached the healer (DECISIONS D049).
+        keep_firing_for: 30s
         labels:
           severity: critical
         annotations:

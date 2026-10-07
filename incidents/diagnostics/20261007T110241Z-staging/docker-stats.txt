@@ -1,0 +1,27 @@
+CONTAINER ID   NAME                        CPU %     MEM USAGE / LIMIT   MEM %     NET I/O           BLOCK I/O         PIDS
+7702f784083f   healer                      4.75%     122.8MiB / 256MiB   47.95%    943kB / 299kB     53.2kB / 16.4kB   24
+75b5ea95cfcf   api-prod-2                  7.51%     49.44MiB / 256MiB   19.31%    10.1MB / 7.98MB   0B / 0B           2
+385fb7e2f420   api-prod-1                  6.93%     49.53MiB / 256MiB   19.35%    10.4MB / 8.52MB   0B / 0B           2
+28ad811b1d4c   loadgen-prod                5.45%     20.76MiB / 128MiB   16.22%    6.61MB / 2.8MB    20.5kB / 0B       2
+863acdf849dd   api-staging-2               2.54%     82.09MiB / 256MiB   32.07%    7.52MB / 6.9MB    0B / 0B           3
+e1deb8934346   api-staging-1               1.45%     83.31MiB / 256MiB   32.54%    2.59MB / 2.65MB   0B / 0B           3
+91b61bcf8e26   loadgen-staging             3.31%     20.83MiB / 128MiB   16.28%    4.58MB / 2.27MB   77.8kB / 0B       2
+2cd6193b0558   docker-socket-proxy         0.71%     33.54MiB / 64MiB    52.40%    327kB / 6.23MB    13.5MB / 0B       9
+a88899c04670   redis-exporter-prod         0.77%     9.012MiB / 64MiB    14.08%    35.5MB / 15.7MB   0B / 0B           8
+77753082d217   postgres-exporter-prod      0.07%     8.516MiB / 64MiB    13.31%    121MB / 48.3MB    0B / 0B           6
+706e85e87510   redis-exporter-staging      0.65%     10.07MiB / 64MiB    15.73%    34.7MB / 15.3MB   90.1kB / 0B       8
+f6ccbc31075b   postgres-exporter-staging   0.00%     10.28MiB / 64MiB    16.06%    116MB / 46.4MB    0B / 0B           6
+76680d7d90f6   cadvisor                    6.47%     37.63MiB / 256MiB   14.70%    1.21MB / 48.3MB   12.8MB / 0B       17
+26391295a1a9   backup-agent-prod           0.00%     2.359MiB / 128MiB   1.84%     427MB / 1.54MB    422kB / 59.4MB    2
+ce7bc531dc52   postgres-prod               1.05%     63.51MiB / 512MiB   12.40%    171MB / 671MB     5.19MB / 2.47GB   13
+5c10c3e989b2   backup-agent-staging        0.00%     2.051MiB / 128MiB   1.60%     298MB / 1.38MB    279kB / 101MB     2
+40c386af2f0f   nginx-prod                  3.77%     3.59MiB / 64MiB     5.61%     302MB / 381MB     0B / 0B           2
+5e7eb0e64695   nginx-staging               0.55%     3.246MiB / 64MiB    5.07%     217MB / 257MB     32.8kB / 0B       2
+1d4844ff1e8c   prometheus                  1.48%     113.4MiB / 768MiB   14.76%    235MB / 14MB      7.62MB / 133MB    7
+1e0c453175ae   node-exporter               0.00%     10.88MiB / 64MiB    17.00%    1.36MB / 28.1MB   336kB / 0B        8
+7bd47cce3f27   toxiproxy-prod              5.14%     7.938MiB / 64MiB    12.40%    568MB / 569MB     229kB / 0B        13
+a047ff6c5c02   redis-prod                  0.44%     4.473MiB / 128MiB   3.49%     58MB / 296MB      1.05MB / 479kB    6
+f069eafc7d7e   toxiproxy-staging           0.37%     7.938MiB / 64MiB    12.40%    390MB / 390MB     180kB / 0B        14
+87277d53b8b7   redis-staging               0.36%     4.273MiB / 128MiB   3.34%     547kB / 1.45MB    446kB / 0B        6
+42e1f2f3e1b6   grafana                     0.61%     198.8MiB / 256MiB   77.65%    38.9kB / 34.1kB   9.4MB / 65.8MB    103
+de044155bd96   alertmanager                0.05%     36.66MiB / 64MiB    57.28%    1.61MB / 14.7MB   17.7MB / 180kB    9

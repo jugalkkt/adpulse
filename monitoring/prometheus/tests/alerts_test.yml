@@ -124,3 +124,29 @@ tests:
               summary: "The healer gave up on AdPulseApiReplicaDown in staging"
               description: "Automatic remediation failed or ran out of attempts. A human must act."
               runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/HealerEscalated.md
+
+  # Real incident 2026-10-07 db-down: with the DB gone, exporter scrapes hit the
+  # timeout every few evaluations (no pg_up sample). keep_firing_for must hold
+  # the alert through those gaps once it is firing.
+  - name: database down keeps firing through scrape gaps
+    interval: 5s
+    input_series:
+      - series: 'pg_up{job="postgres", env="staging", instance="postgres-exporter-staging:9187"}'
+        values: "1 0 0 0 0 0 stale 0 0 stale 0 0 0 stale 0 0"
+    alert_rule_test:
+      - eval_time: 35s
+        alertname: AdPulseDatabaseDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: postgres, env: staging, instance: "postgres-exporter-staging:9187"}
+            exp_annotations:
+              summary: "PostgreSQL in staging is down"
+              description: "postgres_exporter cannot connect to postgres-staging (pg_up == 0) for 15s."
+              runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/AdPulseDatabaseDown.md
+      - eval_time: 50s
+        alertname: AdPulseDatabaseDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: postgres, env: staging, instance: "postgres-exporter-staging:9187"}
+            exp_annotations:
+              summary: "PostgreSQL in staging is down"
+              description: "postgres_exporter cannot connect to postgres-staging (pg_up == 0) for 15s."
+              runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/AdPulseDatabaseDown.md

@@ -1,0 +1,64 @@
+{
+  "id": "20261007T110006Z-db-down-staging",
+  "scenario": "db-down",
+  "layer": "database",
+  "env": "staging",
+  "description": "docker stop postgres-<env>",
+  "expected_alert": "AdPulseDatabaseDown",
+  "expected_heal": "restart_db",
+  "human_stop": false,
+  "events": [
+    {
+      "event": "injected",
+      "ts": "2026-10-07T11:00:11.438Z",
+      "t_plus_s": 0.0
+    },
+    {
+      "event": "first_failed_probe",
+      "ts": "2026-10-07T11:00:19.183Z",
+      "t_plus_s": 7.7
+    },
+    {
+      "event": "alert_firing",
+      "ts": "2026-10-07T11:00:33.469Z",
+      "t_plus_s": 22.0
+    },
+    {
+      "event": "injection_removed",
+      "ts": "2026-10-07T11:10:12.025Z",
+      "t_plus_s": 600.6
+    },
+    {
+      "event": "alert_resolved",
+      "ts": "2026-10-07T11:10:15.030Z",
+      "t_plus_s": 603.6
+    }
+  ],
+  "other_alerts": [
+    {
+      "alertname": "AdPulseServingFallbackAds",
+      "first_seen": "2026-10-07T11:01:20.615Z",
+      "t_plus_s": 69.2
+    },
+    {
+      "alertname": "AdPulseHighLatencyP95",
+      "first_seen": "2026-10-07T11:02:30.833Z",
+      "t_plus_s": 139.4
+    }
+  ],
+  "mttd_s": 22.0,
+  "mttr_s": null,
+  "heal": [],
+  "probes": {
+    "interval_s": 1,
+    "total": 603,
+    "failed_non_200": 0,
+    "fallback": 593,
+    "slow_over_250ms": 594,
+    "max_latency_s": 0.7603
+  },
+  "window": {
+    "start": "2026-10-07T11:00:11.438Z",
+    "end": "2026-10-07T11:10:15.030Z"
+  }
+}
