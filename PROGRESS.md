@@ -408,3 +408,6 @@ Raw logs of the failed attempts are kept in `incidents/raw/` (gitignored).
   - check Billing → Credits on 2026-10-08;
   - before going public, remove the runner (README) and decide whether to redact the campus IP in PROGRESS.md / SECURITY.md;
   - CD runs queued while the runner was offline will run when `~/actions-runner/run.sh` starts again (they deploy the latest main to staging).
+
+## Publishing (2026-10-07)
+- At Jugal's request, history was rewritten (`git filter-branch`): Claude co-author trailers removed from all 45 commit messages, and the operator's IP redacted from PROGRESS.md and SECURITY.md in every commit. Content, authors and dates are unchanged; SHAs changed (old→new in `docs/COMMIT_MAP.md`). New commits carry no co-author trailer.

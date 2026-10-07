@@ -148,6 +148,7 @@ make help                                # every target
 - [LEARNING.md](LEARNING.md): every tool explained from zero, with exercises and a 2-week study plan
 - [INTERVIEW_PREP.md](docs/INTERVIEW_PREP.md): pitch, walkthrough, questions and answers
 - [DECISIONS.md](docs/DECISIONS.md): 68 decisions with their reasons and alternatives
+- [COMMIT_MAP.md](docs/COMMIT_MAP.md): old → new commit SHAs (the history was rewritten before publishing)
 - [SECURITY.md](docs/SECURITY.md): each control, where it lives and how it was verified
 - [docs/rca/](docs/rca/) and [docs/runbooks/](docs/runbooks/): incidents and the response for every alert
 
