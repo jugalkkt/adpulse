@@ -9,7 +9,8 @@
 - **Phase 5: DONE** (2026-10-07). DoD passed. Local staging, prod and monitoring stacks are **running**.
 - **Phase 6: DONE** (2026-10-07). DoD passed. Both envs run release `0b5f3a9` with 2 healthy replicas each.
 - **Phase 7: DONE** (2026-10-07). DoD passed. Both envs on release `7a6904c`.
-- **Phase 8:** IN PROGRESS (healer). Code, playbooks, Terraform and Make targets are written but not yet built or tested; see the Phase 8 section.
+- **Phase 8: DONE** (2026-10-07). DoD passed. The healer is live (dry-run off).
+- **Phase 9:** next (chaos, MTTD/MTTR, RCAs). The laptop must stay awake and on Ethernet.
 
 ## Phase 0: Preflight
 
@@ -231,21 +232,32 @@ No chat webhook. Alerts go to the healer, the Alertmanager UI and Grafana.
   - Stop postgres-staging → AdPulseDatabaseDown after **30s**. The API kept serving HTTP 200 fallback ads. AdPulseServingFallbackAds was **suppressed by the inhibition rule**.
 - After the tests: 0 firing alerts.
 
-## Phase 8: Healer (in progress, 2026-10-07)
+## Phase 8: Self-healing healer
 
-### Written (not yet built or tested)
-- `healer/healer/engine.py`: decisions (run/ignore/escalate), dedupe by fingerprint, cooldown, max attempts per window, escalate once per window, playbook failure → escalate, dry-run, per-env lock, allow-listed playbook names.
-- `healer/healer/app.py`: POST /alertmanager, /healthz, /metrics; subprocess `ansible-playbook` with a 120s timeout; JSON heal log at /data/heal-log.jsonl (= incidents/); Grafana annotations (tags heal, env, alertname); metrics adpulse_heal_{actions_total,duration_seconds,escalations_total{alert,env,reason},in_progress,decisions_total}.
-- `healer/healing.yml`: the alert → playbook map (Section 10).
-- `healer/tests/test_engine.py`: 14 tests.
-- `ansible/playbooks/heal/`: restart_api, restart_db, restart_cache, scale_api, scale_down_api, kill_noisy_neighbor, cleanup_backups, diagnose_latency, tasks/restart_one, ansible.cfg. ansible-lint: production profile, 0 failures.
-- `docker/healer/Dockerfile`: FROM adpulse-base; docker-ce-cli 29.8.2 from Docker's repo (key fingerprint checked); hash-locked venv; community.docker 5.4.0 from Galaxy; non-root.
-- Terraform `modules/monitoring_stack/healer.tf`: internal network adpulse-healer-docker, docker-socket-proxy v0.5.0 (CONTAINERS, IMAGES, NETWORKS, EXEC, INFO, POST only; socket mounted read-only), healer (runs as the host uid so it can write incidents/, DOCKER_HOST=tcp://docker-socket-proxy:2375).
-- `scripts/grafana_token.sh`: service account adpulse-healer (Editor), token written to .env without printing.
-- Prometheus `healer` job. Make: build-healer, lock-healer, test-healer, grafana-token; `make test` runs test-healer; `make monitoring` passes image_tag and HEALER_DRY_RUN.
+### Built (2026-10-07)
+- `healer/`: engine.py (decisions), app.py (webhook, runner, heal log, Grafana annotations, metrics), healing.yml (alert → playbook allow-list), 14 unit tests. Dependencies hash-locked (`make lock-healer`; needed the Ethernet connection, D-notes in PROGRESS).
+- `ansible/playbooks/heal/`: restart_api (container / instance IP / missing / rolling), restart_db (+pg_isready +API readyz), restart_cache, scale_api (clone, max 4), scale_down_api (on resolve), kill_noisy_neighbor (only role=chaos or unlabelled, protected roles never), cleanup_backups (junk, retention, quota), diagnose_latency (evidence only).
+- `docker/healer/Dockerfile` (FROM adpulse-base, docker-ce-cli 29.8.2, community.docker 5.4.0, non-root).
+- Terraform: socket proxy + healer + internal network (D043, D044). `scripts/grafana_token.sh` (service account adpulse-healer, token only in .env).
+- Prometheus healer job (honor_labels). HealerEscalated rule fixed (D047). Make: build-healer, lock-healer, test-healer, test-heal, grafana-token.
 
-### Blocker being worked on
-- `make lock-healer` (pip-compile --generate-hashes) is very slow on this network: it downloads every `cryptography` wheel at ~350 KB/s to hash it. The first attempt hung and was killed; the second is running verbosely (log in Claude's scratchpad). Next: build → test-healer → dry-run test → live test (`docker stop api-staging-1`).
+### Problems hit and fixed
+1. Lock: pip-compile hashing timed out three times at ~350 KB/s (campus Wi-Fi). Asked Jugal (R9); he switched to Ethernet (4.3 MB/s), and the lock finished in 150 s.
+2. The healer couldn't run as uid:uid because /opt/adpulse is 0750 (D044).
+3. Live test #1: escalated, because Ansible's temp dir was under /home/ubuntu on the read-only rootfs (D044). Escalation itself worked as designed.
+4. Live test #2: escalated, because the non-verbose docker_host_info had no State (D046).
+5. `make test-heal` found 2 more bugs: dotted label keys (also in the Phase 6 deploy) and the diagnostics timestamp re-evaluated per use.
+6. HealerEscalated never fired, and the env label clashed (D047).
+Raw logs of the failed attempts are kept in `incidents/raw/` (gitignored).
+
+### Phase 8 DoD (2026-10-07)
+- `make test-healer`: **14 passed**, ruff clean (mapping, allow-list rejection, label→vars, resolved/on_resolved, dedupe, cooldown, max attempts + escalate once, window expiry, error-rate re-fire escalation, failed playbook → escalate, dry-run, per-env lock, webhook dry-run).
+- **Dry run** (HEALER_DRY_RUN=true): sample payload → decisions restart_db / restart_api / BackupStale ignored; the heal log shows `result: dry_run` with the correct extra_vars.
+- `make test-heal`: **11/11 PASS** (all 8 playbooks against staging).
+- **Live, dry-run off:** `docker stop api-staging-1` at T+0 → AdPulseApiReplicaDown (reason=missing) active at **T+31s** → healer `restart_api` succeeded in **14.4s** → api-staging-1 healthy at **T+52s** → alert resolved at **T+60s** → Grafana annotation "healer: restart_api for AdPulseApiReplicaDown (staging) -> success in 14.4s".
+- Escalation: a webhook for a non-existent replica IP → playbook failed → escalated → **HealerEscalated firing 10s later** (alert=AdPulseApiReplicaDown, env=staging).
+- Socket proxy: the healer can list/restart containers and is denied volumes (403).
+- `make test-rules`: SUCCESS (5 tests). `make lint-ansible`: production profile, 0 failures.
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.

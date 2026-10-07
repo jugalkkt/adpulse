@@ -95,7 +95,10 @@ scrape_configs:
       - targets: ["localhost:9090"]
         labels: {env: monitoring}
 
+  # honor_labels: the healer's own env label (the env it healed) must win over
+  # the target's env="monitoring", or alerts would name the wrong env.
   - job_name: healer
+    honor_labels: true
     static_configs:
       - targets: ["healer:9100"]
         labels: {env: monitoring}

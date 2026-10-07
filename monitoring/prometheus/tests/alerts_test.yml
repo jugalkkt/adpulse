@@ -99,3 +99,28 @@ tests:
               summary: "staging: backup directory will exceed its quota within 1h"
               description: "At the current growth rate (last 10m) the backup directory reaches 4.619GiB within an hour, above the quota."
               runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/BackupQuotaWillFillSoon.md
+
+  # A brand-new escalation series starts at 1: increase() alone misses it.
+  - name: first escalation of a new label set fires HealerEscalated
+    interval: 5s
+    input_series:
+      - series: 'adpulse_heal_escalations_total{job="healer", env="staging", instance="healer:9100", alert="AdPulseApiReplicaDown", reason="playbook_failed"}'
+        values: "_x12 1x24"
+    alert_rule_test:
+      - eval_time: 30s
+        alertname: HealerEscalated
+        exp_alerts: []
+      - eval_time: 70s
+        alertname: HealerEscalated
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: healer
+              env: staging
+              instance: healer:9100
+              alert: AdPulseApiReplicaDown
+              reason: playbook_failed
+            exp_annotations:
+              summary: "The healer gave up on AdPulseApiReplicaDown in staging"
+              description: "Automatic remediation failed or ran out of attempts. A human must act."
+              runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/HealerEscalated.md
