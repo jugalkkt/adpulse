@@ -17,6 +17,10 @@ envs:
     nginx_port: 8080
     chaos_enabled: false
     replicas: 2
+  aws-prod:
+    nginx_port: 80
+    chaos_enabled: false
+    replicas: 2
 
 env_cfg: "{{ envs[env] }}"
 secret_prefix: "{{ env | upper | replace('-', '_') }}"

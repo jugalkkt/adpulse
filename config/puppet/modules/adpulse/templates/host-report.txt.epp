@@ -1,0 +1,12 @@
+<%- | Array[Integer] $ports, String $journal | -%>
+AdPulse AWS host hardening report
+Managed by Puppet (OpenVox), class adpulse::host
+
+Controls applied:
+1. Deploy user adpulse: SSH key only (password locked), member of docker
+2. sshd: PermitRootLogin no, PasswordAuthentication no, KbdInteractiveAuthentication no, MaxAuthTries 3
+3. ufw: default deny incoming; allowed tcp ports: <%= $ports.join(', ') %> (allowed before enabling)
+   Note: Docker-published ports bypass ufw; the AWS security group (my IP /32) is the boundary
+4. unattended-upgrades enabled (daily lists + upgrades)
+5. sysctl: no ICMP redirects or source routing, syncookies, kptr/dmesg restricted, protected links
+6. journald capped at <%= $journal %>, 7 days retention

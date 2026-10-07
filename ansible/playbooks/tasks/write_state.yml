@@ -1,4 +1,5 @@
 - name: Write deploy state for {{ env }}
+  delegate_to: localhost  # release state lives on the controller (laptop)
   ansible.builtin.copy:
     dest: "{{ state_dir }}/{{ env }}.json"
     mode: "0640"

@@ -48,7 +48,7 @@ groups:
         expr: count by (env) (up{job="api"} == 1)
 
       # Minimum healthy replicas per env (the deploy runs 2; the healer may scale to 4).
+      # Derived from the envs that have a postgres exporter target, so the same
+      # rule works locally (staging, prod) and on AWS (aws-prod).
       - record: env:adpulse_api_replicas_expected:count
-        expr: |
-          label_replace(vector(2), "env", "staging", "", "")
-          or label_replace(vector(2), "env", "prod", "", "")
+        expr: count by (env) (up{job="postgres"}) * 0 + 2

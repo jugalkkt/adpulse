@@ -1,0 +1,238 @@
+# Bootstrap the AWS host: Docker, Puppet adpulse::host (+ noop drift check),
+# Chef adpulse_db::host, and the files the Terraform stack bind-mounts.
+#   make aws-bootstrap
+- name: Bootstrap AWS host
+  hosts: all
+  gather_facts: false
+  become: true
+  vars:
+    docker_version: "5:29.8.2-1~ubuntu.24.04~noble"
+    docker_key_fpr: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+    openvox_release: 8
+    openvox_version: "8.29.0-1+ubuntu24.04"
+    cinc_version: "19.3.14"
+    cinc_sha256: c710cc8bf953fa56b7a4b0b726d9fcb9cb5bad2dc8caec4eaa439c4626f9aebf
+    remote_repo: /opt/adpulse-repo
+    deploy_ssh_key: "{{ lookup('ansible.builtin.file', '~/.ssh/adpulse_aws.pub') }}"
+  handlers:
+    - name: Restart Docker
+      ansible.builtin.systemd_service:
+        name: docker
+        state: restarted
+  tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Wait for cloud-init (user_data) to finish
+      ansible.builtin.command: cloud-init status --wait
+      changed_when: false
+
+    # ---------------------------------------------------------------- Docker
+    - name: Base packages
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, gnupg, python3-requests, rsync]
+        state: present
+        update_cache: true
+
+    - name: Docker apt key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+
+    - name: Check the Docker key fingerprint
+      ansible.builtin.shell: |
+        set -o pipefail
+        gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc | awk -F: '$1=="fpr"{print $10}' | grep -qx {{ docker_key_fpr }}
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Docker apt repository
+      ansible.builtin.deb822_repository:
+        name: docker
+        types: deb
+        uris: https://download.docker.com/linux/ubuntu
+        suites: noble
+        components: stable
+        architectures: amd64
+        signed_by: /etc/apt/keyrings/docker.asc
+
+    - name: Docker Engine (same version as the laptop)
+      ansible.builtin.apt:
+        name:
+          - "docker-ce={{ docker_version }}"
+          - "docker-ce-cli={{ docker_version }}"
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+    - name: Docker daemon config (bounded json logs)
+      ansible.builtin.copy:
+        dest: /etc/docker/daemon.json
+        mode: "0644"
+        content: |
+          {"log-driver": "json-file", "log-opts": {"max-size": "10m", "max-file": "3"}}
+      notify: Restart Docker
+
+    - name: Apply the Docker config now
+      ansible.builtin.meta: flush_handlers
+
+    - name: The ubuntu user may use Docker (Terraform and Ansible connect as ubuntu)
+      ansible.builtin.user:
+        name: ubuntu
+        groups: docker
+        append: true
+
+    - name: Re-connect so the docker group applies
+      ansible.builtin.meta: reset_connection
+
+    # ---------------------------------------------------------------- Puppet (OpenVox)
+    - name: OpenVox release package
+      ansible.builtin.apt:
+        deb: "https://apt.voxpupuli.org/openvox{{ openvox_release }}-release-ubuntu24.04.deb"
+
+    - name: OpenVox agent
+      ansible.builtin.apt:
+        name: "openvox-agent={{ openvox_version }}"
+        update_cache: true
+
+    - name: Copy the Puppet code
+      ansible.posix.synchronize:
+        src: "{{ playbook_dir }}/../../config/puppet/"
+        dest: /opt/adpulse/puppet/
+        delete: true
+        rsync_opts: ["--chmod=D755,F644"]
+
+    - name: Puppet apply adpulse::host
+      ansible.builtin.command:
+        argv:
+          - /opt/puppetlabs/bin/puppet
+          - apply
+          - --detailed-exitcodes
+          - --color=false
+          - --modulepath=/opt/adpulse/puppet/modules
+          - -e
+          - "class { 'adpulse::host': deploy_ssh_key => '{{ deploy_ssh_key }}' }"
+      register: puppet_apply
+      changed_when: puppet_apply.rc == 2
+      failed_when: puppet_apply.rc not in [0, 2]
+
+    - name: Puppet changes
+      ansible.builtin.debug:
+        msg: "{{ puppet_apply.stdout_lines | select('search', 'Notice:') | list }}"
+
+    # Plan 12.8: test a NEW SSH session before trusting the hardened sshd.
+    - name: New SSH session as ubuntu still works (no ControlMaster reuse)
+      ansible.builtin.command:
+        argv: [ssh, -o, ControlPath=none, -o, BatchMode=yes, -o, ConnectTimeout=10, -i, "{{ ansible_ssh_private_key_file }}",
+               "ubuntu@{{ ansible_host }}", "true"]
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: New SSH session as the adpulse deploy user works
+      ansible.builtin.command:
+        argv: [ssh, -o, ControlPath=none, -o, BatchMode=yes, -o, ConnectTimeout=10, -i, "{{ ansible_ssh_private_key_file }}",
+               "adpulse@{{ ansible_host }}", "true"]
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Password login is refused (root and ubuntu)
+      ansible.builtin.command:
+        argv: [ssh, -o, ControlPath=none, -o, BatchMode=yes, -o, ConnectTimeout=10, -o, PubkeyAuthentication=no,
+               -o, PreferredAuthentications=password, "root@{{ ansible_host }}", "true"]
+      delegate_to: localhost
+      become: false
+      register: pw_login
+      changed_when: false
+      failed_when: pw_login.rc == 0
+
+    - name: Drift check - second run in noop must change nothing
+      ansible.builtin.command:
+        argv:
+          - /opt/puppetlabs/bin/puppet
+          - apply
+          - --noop
+          - --detailed-exitcodes
+          - --color=false
+          - --modulepath=/opt/adpulse/puppet/modules
+          - -e
+          - "class { 'adpulse::host': deploy_ssh_key => '{{ deploy_ssh_key }}' }"
+      register: puppet_noop
+      changed_when: false
+      failed_when: puppet_noop.rc != 0
+
+    - name: Puppet noop output (idempotency evidence)
+      ansible.builtin.debug:
+        msg: "{{ puppet_noop.stdout_lines }}"
+
+    # ---------------------------------------------------------------- Chef (Cinc)
+    - name: Cinc package (sha256 from omnitruck metadata)
+      ansible.builtin.get_url:
+        url: "https://packages.cinc.sh/files/stable/cinc/{{ cinc_version }}/ubuntu/24.04/cinc_{{ cinc_version }}-1_amd64.deb"
+        dest: "/tmp/cinc_{{ cinc_version }}.deb"
+        checksum: "sha256:{{ cinc_sha256 }}"
+        mode: "0644"
+
+    - name: Install Cinc
+      ansible.builtin.apt:
+        deb: "/tmp/cinc_{{ cinc_version }}.deb"
+
+    - name: Copy the cookbook
+      ansible.posix.synchronize:
+        src: "{{ playbook_dir }}/../../config/chef/"
+        dest: /opt/adpulse/chef-repo/
+        rsync_opts: ["--chmod=D755,F644", "--exclude=nodes"]
+
+    - name: Converge adpulse_db::host (twice; the second must update 0 resources)
+      ansible.builtin.command:
+        argv: [cinc-client, --local-mode, --chef-license, accept-no-persist, --no-color,
+               --config-option, chef_repo_path=/opt/adpulse/chef-repo, --override-runlist, "recipe[adpulse_db::host]"]
+        chdir: /opt/adpulse/chef-repo
+      loop: [1, 2]
+      register: cinc_runs
+      changed_when: "'0/' not in (cinc_runs.stdout | regex_search('[0-9]+/[0-9]+ resources updated') | default(''))"
+
+    - name: Chef idempotency
+      ansible.builtin.assert:
+        that: cinc_runs.results[1].stdout is search('Infra Phase complete, 0/[0-9]+ resources updated')
+        fail_msg: "Second Cinc converge was not idempotent"
+        success_msg: "{{ cinc_runs.results[1].stdout | regex_search('Infra Phase complete, [0-9]+/[0-9]+ resources updated') }}"
+
+    # ---------------------------------------------------------------- files for the Terraform stack
+    - name: Repo directory for bind mounts
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: "0755"
+      loop: ["{{ remote_repo }}", "{{ remote_repo }}/incidents"]
+
+    - name: Monitoring configuration
+      ansible.posix.synchronize:
+        src: "{{ playbook_dir }}/../../monitoring/"
+        dest: "{{ remote_repo }}/monitoring/"
+        delete: true
+        rsync_opts: ["--chmod=D755,F644"]
+
+    - name: Prometheus config for aws-prod
+      ansible.builtin.copy:
+        src: "{{ remote_repo }}/monitoring/prometheus/prometheus.aws.yml"
+        dest: "{{ remote_repo }}/monitoring/prometheus/prometheus.yml"
+        remote_src: true
+        mode: "0644"
+
+    - name: Hardening reports
+      ansible.builtin.command: cat /etc/adpulse/hardening-report.txt /etc/adpulse-db-host-report.txt
+      register: reports
+      changed_when: false
+
+    - name: Show reports
+      ansible.builtin.debug:
+        msg: "{{ reports.stdout_lines }}"

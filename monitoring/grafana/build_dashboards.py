@@ -202,11 +202,12 @@ def env_variable():
         "name": "env",
         "label": "Environment",
         "type": "custom",
-        "query": "staging,prod",
+        "query": "staging,prod,aws-prod",
         "current": {"text": "staging", "value": "staging"},
         "options": [
             {"text": "staging", "value": "staging", "selected": True},
             {"text": "prod", "value": "prod", "selected": False},
+            {"text": "aws-prod", "value": "aws-prod", "selected": False},
         ],
         "multi": False,
         "includeAll": False,

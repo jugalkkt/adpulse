@@ -1,6 +1,6 @@
 # Roll back to the previous release: make rollback ENV=staging
 - name: Roll back AdPulse API
-  hosts: localhost
+  hosts: all
   gather_facts: false
   tasks:
     - name: Load secrets

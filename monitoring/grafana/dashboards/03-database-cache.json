@@ -21,7 +21,7 @@
         "name": "env",
         "label": "Environment",
         "type": "custom",
-        "query": "staging,prod",
+        "query": "staging,prod,aws-prod",
         "current": {
           "text": "staging",
           "value": "staging"
@@ -35,6 +35,11 @@
           {
             "text": "prod",
             "value": "prod",
+            "selected": false
+          },
+          {
+            "text": "aws-prod",
+            "value": "aws-prod",
             "selected": false
           }
         ],

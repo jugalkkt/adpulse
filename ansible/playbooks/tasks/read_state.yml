@@ -1,10 +1,12 @@
 - name: Ensure deploy/state exists
+  delegate_to: localhost  # release state lives on the controller (laptop)
   ansible.builtin.file:
     path: "{{ state_dir }}"
     state: directory
     mode: "0750"
 
 - name: Read deploy state for {{ env }}
+  delegate_to: localhost  # release state lives on the controller (laptop)
   ansible.builtin.slurp:
     src: "{{ state_dir }}/{{ env }}.json"
   register: state_raw

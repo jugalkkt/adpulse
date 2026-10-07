@@ -2,7 +2,7 @@
 #   silence alerts -> migrate -> roll replicas -> write state -> expire silence.
 #   If a replica fails its health check, roll back to the previous tag and fail.
 - name: Deploy AdPulse API
-  hosts: localhost
+  hosts: all
   gather_facts: false
   vars:
     silence_comment: "deploy {{ image_tag }}"

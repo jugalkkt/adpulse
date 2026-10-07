@@ -63,6 +63,10 @@ tests:
         values: "1x30"
       - series: 'up{job="api", env="prod", instance="d:8000"}'
         values: "1x30"
+      - series: 'up{job="postgres", env="staging", instance="postgres-exporter-staging:9187"}'
+        values: "1x30"
+      - series: 'up{job="postgres", env="prod", instance="postgres-exporter-prod:9187"}'
+        values: "1x30"
     alert_rule_test:
       - eval_time: 2m
         alertname: AdPulseApiReplicaDown

@@ -1,6 +1,6 @@
 # Run migrations only: make migrate ENV=staging TAG=<sha>
 - name: Migrate AdPulse database
-  hosts: localhost
+  hosts: all
   gather_facts: false
   tasks:
     - name: Load secrets

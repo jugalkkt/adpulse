@@ -101,6 +101,7 @@ AM_IMAGE := prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a2
 
 lint-monitoring: ## promtool check config/rules + amtool check-config
 	docker run --rm --network none -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" --entrypoint promtool $(PROM_IMAGE) check config /etc/prometheus/prometheus.yml
+	docker run --rm --network none -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" --entrypoint promtool $(PROM_IMAGE) check config /etc/prometheus/prometheus.aws.yml
 	docker run --rm --network none -v "$(CURDIR)/monitoring/alertmanager:/etc/alertmanager:ro" --entrypoint amtool $(AM_IMAGE) check-config /etc/alertmanager/alertmanager.yml
 
 test-rules: ## promtool unit tests for alert rules
@@ -246,8 +247,14 @@ aws-plan: ## Terraform plan for AWS (detects your public IP; saves aws.tfplan)
 aws-up: ## Apply the SAVED aws.tfplan (review it first; plan rule R4)
 	$(AWS_TF) apply -input=false aws.tfplan
 
-aws-bootstrap: ## Ansible bootstrap of the AWS host
-	$(call todo,Phase 12)
+aws-inventory: ## Write ansible/inventories/aws/hosts.yml from terraform output
+	@mkdir -p ansible/inventories/aws
+	@ip=$$($(AWS_TF) output -raw public_ip); printf 'all:\n  hosts:\n    aws-prod:\n      ansible_host: %s\n      ansible_user: ubuntu\n      ansible_ssh_private_key_file: ~/.ssh/adpulse_aws\n      ansible_python_interpreter: /usr/bin/python3\n      ansible_ssh_common_args: "-o StrictHostKeyChecking=accept-new"\n' "$$ip" > ansible/inventories/aws/hosts.yml; echo "inventory -> $$ip"
+
+AWS_PLAYBOOK := cd ansible && ANSIBLE_CONFIG=ansible.cfg ansible-playbook -i inventories/aws/hosts.yml
+
+aws-bootstrap: aws-inventory ## Ansible bootstrap of the AWS host (Docker, Puppet, Chef)
+	$(AWS_PLAYBOOK) playbooks/aws_bootstrap.yml
 
 aws-deploy: ## Deploy the stack to AWS
 	$(call todo,Phase 12)

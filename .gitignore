@@ -25,3 +25,5 @@ plan.md
 # Generated SBOMs (make sbom; CI uploads them as an artifact)
 sbom/
 *.tfplan
+# Generated from terraform output (make aws-inventory)
+ansible/inventories/aws/hosts.yml
