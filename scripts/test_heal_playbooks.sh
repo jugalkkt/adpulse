@@ -26,6 +26,10 @@ docker stop "api-$ENV_NAME-2" >/dev/null
 if play restart_api "{\"env\":\"$ENV_NAME\",\"reason\":\"missing\"}" && [[ "$(health "api-$ENV_NAME-2")" == healthy ]]; then
   pass "stopped api-$ENV_NAME-2 started and healthy"; else bad "restart_api missing"; fi
 
+echo "== restart_api, reason=missing but everything already healthy (second alert of a pair)"
+if play restart_api "{\"env\":\"$ENV_NAME\",\"reason\":\"missing\"}"; then
+  pass "no-op success when all replicas are already running"; else bad "restart_api missing no-op"; fi
+
 echo "== restart_api, instance=<ip> (hung replica)"
 ip="$(docker inspect -f "{{(index .NetworkSettings.Networks \"adpulse-$ENV_NAME\").IPAddress}}" "api-$ENV_NAME-1")"
 before="$(started "api-$ENV_NAME-1")"

@@ -1,0 +1,87 @@
+{
+  "id": "20261007T112231Z-api-hang-staging",
+  "scenario": "api-hang",
+  "layer": "software",
+  "env": "staging",
+  "description": "chaos endpoint hang on api-<env>-1: every route stops answering (scrape and health time out)",
+  "expected_alert": "AdPulseApiReplicaDown",
+  "expected_heal": "restart_api",
+  "human_stop": false,
+  "events": [
+    {
+      "event": "injected",
+      "ts": "2026-10-07T11:22:36.308Z",
+      "t_plus_s": 0.0
+    },
+    {
+      "event": "first_failed_probe",
+      "ts": "2026-10-07T11:22:40.250Z",
+      "t_plus_s": 3.9
+    },
+    {
+      "event": "alert_firing",
+      "ts": "2026-10-07T11:23:00.601Z",
+      "t_plus_s": 24.3
+    },
+    {
+      "event": "heal_started",
+      "ts": "2026-10-07T11:23:10.378Z",
+      "t_plus_s": 34.1
+    },
+    {
+      "event": "recovered",
+      "ts": "2026-10-07T11:23:32.364Z",
+      "t_plus_s": 56.1
+    },
+    {
+      "event": "injection_removed",
+      "ts": "2026-10-07T11:23:32.577Z",
+      "t_plus_s": 56.3
+    },
+    {
+      "event": "heal_finished",
+      "ts": "2026-10-07T11:23:34.368Z",
+      "t_plus_s": 58.1
+    },
+    {
+      "event": "alert_resolved",
+      "ts": "2026-10-07T11:23:35.579Z",
+      "t_plus_s": 59.3
+    }
+  ],
+  "other_alerts": [],
+  "mttd_s": 24.3,
+  "mttr_s": 56.1,
+  "heal": [
+    {
+      "ts": "2026-10-07T11:23:34.368+00:00",
+      "alertname": "AdPulseApiReplicaDown",
+      "env": "staging",
+      "fingerprint": "25b3ab3265cbf539",
+      "action": "restart_api",
+      "trigger": "firing",
+      "attempt": 1,
+      "result": "success",
+      "duration_s": 23.99,
+      "extra_vars": {
+        "env": "staging",
+        "alertname": "AdPulseApiReplicaDown",
+        "instance": "172.28.10.11:8000",
+        "reason": "unreachable"
+      },
+      "stdout_tail": "*******\nskipping: [localhost]\n\nTASK [Restart or start | api-staging-1] ****************************************\nchanged: [localhost]\n\nTASK [Wait for healthy | api-staging-1] ****************************************\nFAILED - RETRYING: [localhost]: Wait for healthy | api-staging-1 (29 retries left).\nFAILED - RETRYING: [localhost]: Wait for healthy | api-staging-1 (28 retries left).\nok: [localhost]\n\nPLAY RECAP *********************************************************************\nlocalhost                  : ok=8    changed=1    unreachable=0    failed=0    skipped=5    rescued=0    ignored=0   \n\n"
+    }
+  ],
+  "probes": {
+    "interval_s": 1,
+    "total": 47,
+    "failed_non_200": 0,
+    "fallback": 0,
+    "slow_over_250ms": 12,
+    "max_latency_s": 2.0115
+  },
+  "window": {
+    "start": "2026-10-07T11:22:36.308Z",
+    "end": "2026-10-07T11:23:35.579Z"
+  }
+}

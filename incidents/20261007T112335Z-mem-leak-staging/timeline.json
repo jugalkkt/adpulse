@@ -1,0 +1,87 @@
+{
+  "id": "20261007T112335Z-mem-leak-staging",
+  "scenario": "mem-leak",
+  "layer": "hardware (container memory)",
+  "env": "staging",
+  "description": "chaos endpoint memory_leak on api-<env>-1: 10 MB/s, plateau at 190 MB (~94% of the 256 MiB limit; uncapped it would OOM before the alert window)",
+  "expected_alert": "ApiContainerMemoryHigh",
+  "expected_heal": "restart_api",
+  "human_stop": false,
+  "events": [
+    {
+      "event": "injected",
+      "ts": "2026-10-07T11:23:40.757Z",
+      "t_plus_s": 0.0
+    },
+    {
+      "event": "alert_firing",
+      "ts": "2026-10-07T11:24:42.973Z",
+      "t_plus_s": 62.2
+    },
+    {
+      "event": "heal_started",
+      "ts": "2026-10-07T11:24:52.893Z",
+      "t_plus_s": 72.1
+    },
+    {
+      "event": "heal_finished",
+      "ts": "2026-10-07T11:25:07.483Z",
+      "t_plus_s": 86.7
+    },
+    {
+      "event": "recovered",
+      "ts": "2026-10-07T11:25:08.719Z",
+      "t_plus_s": 88.0
+    },
+    {
+      "event": "injection_removed",
+      "ts": "2026-10-07T11:25:08.863Z",
+      "t_plus_s": 88.1
+    },
+    {
+      "event": "alert_resolved",
+      "ts": "2026-10-07T11:25:11.864Z",
+      "t_plus_s": 91.1
+    }
+  ],
+  "other_alerts": [
+    {
+      "alertname": "HealerEscalated",
+      "first_seen": "2026-10-07T11:23:45.772Z",
+      "t_plus_s": 5.0
+    }
+  ],
+  "mttd_s": 62.2,
+  "mttr_s": 88.0,
+  "heal": [
+    {
+      "ts": "2026-10-07T11:25:07.483+00:00",
+      "alertname": "ApiContainerMemoryHigh",
+      "env": "staging",
+      "fingerprint": "5a9a4f6c50020b2a",
+      "action": "restart_api",
+      "trigger": "firing",
+      "attempt": 1,
+      "result": "success",
+      "duration_s": 14.59,
+      "extra_vars": {
+        "env": "staging",
+        "alertname": "ApiContainerMemoryHigh",
+        "container": "api-staging-1"
+      },
+      "stdout_tail": "*******\nskipping: [localhost]\n\nTASK [Restart or start | api-staging-1] ****************************************\nchanged: [localhost]\n\nTASK [Wait for healthy | api-staging-1] ****************************************\nFAILED - RETRYING: [localhost]: Wait for healthy | api-staging-1 (29 retries left).\nFAILED - RETRYING: [localhost]: Wait for healthy | api-staging-1 (28 retries left).\nok: [localhost]\n\nPLAY RECAP *********************************************************************\nlocalhost                  : ok=8    changed=1    unreachable=0    failed=0    skipped=5    rescued=0    ignored=0   \n\n"
+    }
+  ],
+  "probes": {
+    "interval_s": 1,
+    "total": 91,
+    "failed_non_200": 0,
+    "fallback": 0,
+    "slow_over_250ms": 0,
+    "max_latency_s": 0.013
+  },
+  "window": {
+    "start": "2026-10-07T11:23:40.757Z",
+    "end": "2026-10-07T11:25:11.864Z"
+  }
+}

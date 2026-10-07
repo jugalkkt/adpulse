@@ -1,0 +1,86 @@
+{
+  "id": "20261007T112050Z-db-down-staging",
+  "scenario": "db-down",
+  "layer": "database",
+  "env": "staging",
+  "description": "docker stop postgres-<env>",
+  "expected_alert": "AdPulseDatabaseDown",
+  "expected_heal": "restart_db",
+  "human_stop": false,
+  "events": [
+    {
+      "event": "injected",
+      "ts": "2026-10-07T11:20:55.499Z",
+      "t_plus_s": 0.0
+    },
+    {
+      "event": "alert_firing",
+      "ts": "2026-10-07T11:21:13.547Z",
+      "t_plus_s": 18.0
+    },
+    {
+      "event": "heal_started",
+      "ts": "2026-10-07T11:21:23.236Z",
+      "t_plus_s": 27.7
+    },
+    {
+      "event": "recovered",
+      "ts": "2026-10-07T11:21:33.038Z",
+      "t_plus_s": 37.5
+    },
+    {
+      "event": "injection_removed",
+      "ts": "2026-10-07T11:21:33.059Z",
+      "t_plus_s": 37.6
+    },
+    {
+      "event": "alert_resolved",
+      "ts": "2026-10-07T11:21:36.060Z",
+      "t_plus_s": 40.6
+    },
+    {
+      "event": "heal_finished",
+      "ts": "2026-10-07T11:21:38.076Z",
+      "t_plus_s": 42.6
+    }
+  ],
+  "other_alerts": [
+    {
+      "alertname": "AdPulseServingFallbackAds",
+      "first_seen": "2026-10-07T11:21:15.629Z",
+      "t_plus_s": 20.1
+    }
+  ],
+  "mttd_s": 18.0,
+  "mttr_s": 37.5,
+  "heal": [
+    {
+      "ts": "2026-10-07T11:21:38.076+00:00",
+      "alertname": "AdPulseDatabaseDown",
+      "env": "staging",
+      "fingerprint": "60db5a7c61f1742a",
+      "action": "restart_db",
+      "trigger": "firing",
+      "attempt": 1,
+      "result": "success",
+      "duration_s": 14.84,
+      "extra_vars": {
+        "env": "staging",
+        "alertname": "AdPulseDatabaseDown"
+      },
+      "stdout_tail": ".\nFAILED - RETRYING: [localhost]: Wait for healthy | postgres-staging (28 retries left).\nok: [localhost]\n\nTASK [Wait for pg_isready] *****************************************************\nok: [localhost]\n\nTASK [Find a running API replica] **********************************************\nok: [localhost]\n\nTASK [Wait until the API reports ready (/readyz 200)] **************************\nok: [localhost]\n\nPLAY RECAP *********************************************************************\nlocalhost                  : ok=7    changed=1    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   \n\n"
+    }
+  ],
+  "probes": {
+    "interval_s": 1,
+    "total": 40,
+    "failed_non_200": 0,
+    "fallback": 0,
+    "slow_over_250ms": 0,
+    "max_latency_s": 0.0108
+  },
+  "window": {
+    "start": "2026-10-07T11:20:55.499Z",
+    "end": "2026-10-07T11:21:36.060Z"
+  }
+}
