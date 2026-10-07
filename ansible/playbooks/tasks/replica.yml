@@ -107,3 +107,10 @@
     - name: "Rename -next to the stable name | {{ replica_name }}"
       ansible.builtin.command: docker rename "api-{{ env }}-{{ replica_index }}-next" "api-{{ env }}-{{ replica_index }}"
       changed_when: true
+
+    # nginx may still hold the removed container's IP for up to 5s (resolver
+    # valid=5s). Wait it out so the next swap, and any smoke test right after
+    # the deploy, never pays the connect timeout to a dead IP.
+    - name: "Let nginx's DNS cache forget the old container | {{ replica_name }}"
+      ansible.builtin.pause:
+        seconds: 6
