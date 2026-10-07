@@ -135,9 +135,9 @@ Each section covers the problem the tool solves (with an everyday analogy), its 
 |---|---|
 | `make lint-puppet` | `puppet lint: clean` |
 | `docker run --rm adpulse-base:dev cat /etc/adpulse/hardening-report.txt` | what Puppet enforced in the image |
-| `docker run --rm adpulse-base:dev cat /etc/adpulse/puppet-idempotency.log` | `puppet apply #2: 0 changes (exit 0)` |
+| `docker run --rm adpulse-base:dev cat /etc/adpulse/puppet-idempotency.log` | the second `puppet apply` log, ending in `puppet apply #2: 0 changes (exit 0)` |
 | `docker run --rm adpulse-base:dev sh -c 'command -v puppet \|\| echo purged'` | `purged`: the agent did its job and was removed |
-| `docker run --rm adpulse-base:dev find / -xdev -perm /6000 -type f` | no output: no setuid/setgid binaries left (D010) |
+| `docker run --rm --user 0 adpulse-base:dev find / -xdev -perm /6000 -type f` | no output: no setuid/setgid binaries left (D010). `--user 0` lets `find` read every directory. |
 
 **Common mistake.** Using `exec` for everything (`exec { 'ufw enable': … }`) without an `unless` or `onlyif` guard. It then runs on every apply, and Puppet is no longer idempotent. See how every `exec` in `host.pp` has a guard.
 

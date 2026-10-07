@@ -14,7 +14,7 @@
 - **Phase 10: DONE** (2026-10-07). DoD passed. Both envs run `18a0065` (deployed by CD and promote). The runner is registered and runs from Jugal's terminal (`~/actions-runner/run.sh`).
 - **Phase 11: DONE** (2026-10-07). DoD passed. Both envs on `cdee903` (rolled out with `make up` under a silence).
 - **Phase 12: DONE.** **AWS TORN DOWN at 2026-10-07T17:04:55Z** (verified empty); access key deleted (verified invalid). Jugal should check Billing → Credits on 2026-10-08.
-- **Phase 13:** in progress (README, LEARNING.md, INTERVIEW_PREP.md). The from-scratch `make up` test was **skipped** at Jugal's choice after `make down` failed on cross-stack links (D068).
+- **Phase 13: DONE** (2026-10-07). README, docs/ARCHITECTURE.md, LEARNING.md, docs/INTERVIEW_PREP.md written. The from-scratch `make up` test was **skipped** at Jugal's choice (D068). **All phases complete.**
 
 ## Phase 0: Preflight
 
@@ -392,3 +392,19 @@ Raw logs of the failed attempts are kept in `incidents/raw/` (gitignored).
 - Attempt 3: monitoring destroy timed out removing `adpulse-textfile`, because it is mounted by `backup-agent-prod`.
 - 🛑 R9 (same symptom after 2 fixes) → Jugal chose: **skip the test, restore with `make up`, document** (D068). Order put back to envs first, with the manual-order note in the `down` target.
 - The partial teardowns deleted local staging, prod and monitoring data (Prometheus history, Grafana, DB volumes). RCA evidence was already saved in `incidents/` and `docs/rca/`.
+- Restore: `make up` from the partial state: **exit 0 in 331 s**, both smoke tests PASS, 27 containers (all healthy, except loadgen, which has no health check). Then `make grafana-token && make monitoring`: OK.
+
+## Phase 13: Documentation (2026-10-07)
+- README.md: pitch, mermaid diagram, results (chaos table from SUMMARY.md plus other measurements), JD coverage with links, quickstart, screenshots, tech stack, next steps; CI/CD and runner notice kept.
+- docs/ARCHITECTURE.md (the plan's diagram, corrected to what was built), LEARNING.md (big picture, 12 tools × concepts/commands/mistake, glossary, why, 2-week plan), docs/INTERVIEW_PREP.md (pitch, walkthrough, 25 Q&A, 4 resume bullets, limitations).
+- Every number cross-checked against SUMMARY.md, PROGRESS.md and the RCAs. LEARNING's "try it" commands were run against the restored stack, and two expected outputs were corrected.
+- Fix: `docs/rca/SUMMARY.md` header had 9 columns for 11-cell rows (the RCA links did not render); fixed in `tools/rca.py` and regenerated.
+
+### Phase 13 DoD / final checks (2026-10-07, TAG=2f15ab1)
+- `make lint`: exit 0. `make test`: 34 app + 14 healer tests passed, rules SUCCESS. `make scan`: exit 0, gitleaks no leaks.
+- The Trivy config scan now shows 2 findings in the Phase 12 AWS code (AWS-0104 all egress, AWS-0164 public IP). Both are documented as accepted risks in SECURITY.md §10. Leftover local `*.tfplan` files deleted.
+- `make plan-infra ENV=staging`: No changes. `make check-dashboards`: PASS. `make dashboards`: no diff.
+- Open for Jugal:
+  - check Billing → Credits on 2026-10-08;
+  - before going public, remove the runner (README) and decide whether to redact the campus IP in PROGRESS.md / SECURITY.md;
+  - CD runs queued while the runner was offline will run when `~/actions-runner/run.sh` starts again (they deploy the latest main to staging).

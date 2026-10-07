@@ -87,7 +87,7 @@ Audit of all 27 running AdPulse containers (`docker inspect`, 2026-10-07):
 | Trivy image scan, CRITICAL with a fix (gate) | **0** in all 5 images (base, api, postgres, healer, chaos-stress); exit 0 |
 | Trivy image scan, HIGH with a fix (report) | **0** |
 | Trivy secret scan in images | none |
-| Trivy config scan (6 Dockerfiles, Terraform) | **0** HIGH/CRITICAL misconfigurations |
+| Trivy config scan (6 Dockerfiles, Terraform) | **0** HIGH/CRITICAL misconfigurations. Re-run at the end of Phase 13: 2 findings, both in the Phase 12 AWS code and both accepted (§10: AWS-0104 egress, AWS-0164 public IP) |
 | gitleaks, full history | **no leaks** (32 commits) |
 | SBOM (CycloneDX) | base 128, api 152, postgres 147, healer 162, chaos-stress 170 components |
 
@@ -139,3 +139,5 @@ How it got there:
 | CI Redis service has no password | ephemeral CI container on GitHub's runner | — |
 | 5 s scrape/evaluation intervals | faster MTTD for demos (D035) | 15–30 s |
 | Lab-only defaults: HTTP (no TLS) on 127.0.0.1 | local only; AWS exposes port 80 to one /32 | TLS everywhere, WAF |
+| AWS security group allows all egress (Trivy AWS-0104, CRITICAL) | the VM pulls packages (apt, Docker, OpenVox, Cinc) from many CDNs; inbound is the risk, and it is limited to 22/80 from one /32 | egress through a NAT or proxy with an allow-list, or VPC endpoints plus a private mirror |
+| AWS subnet gives the VM a public IP (Trivy AWS-0164, HIGH) | one VM, no bastion or NAT; the security group admits only one /32; destroyed the same day | private subnet behind a load balancer; SSM Session Manager instead of SSH |
