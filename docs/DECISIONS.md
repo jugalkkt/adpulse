@@ -360,3 +360,45 @@ Starlette 1.7 warns that `httpx` with its TestClient is deprecated in favour of 
 - **Date:** 2026-10-07
 - **Decision:** `end-of-file-fixer` and `trailing-whitespace` exclude `^incidents/`.
 - **Why:** The hooks "fixed" psql output in a diagnostics file; evidence must stay byte-for-byte as captured. gitleaks still scans it.
+
+### D056: Prod approval is a manual "Promote to prod" workflow
+- **Date:** 2026-10-07
+- **Decision:** `promote.yml` (workflow_dispatch). It only deploys the release staging currently runs, and only if staging's smoke test passes at that moment; prod is rolled back automatically if its own smoke test fails.
+- **Why:** Q6. GitHub refused "required reviewers" for this private repo on the current plan (HTTP 422: "ensure the billing plan supports the required reviewers protection rule"). A dispatch-only workflow gives the same human gate. Verified: dispatching an older tag (`e7337dc`) was refused.
+- **Alternatives:** GitHub Pro (paid); a public repo (unsafe with a self-hosted runner).
+
+### D057: CD via `workflow_run`, on a self-hosted runner, with a clean environment
+- **Date:** 2026-10-07
+- **Decision:**
+  - `cd.yml` triggers on `workflow_run` of CI (completed, branch main), and only runs when `conclusion == success`, `event == push`, and the head repository is this repo.
+  - Runner `adpulse-laptop` (labels `self-hosted, Linux, X64, adpulse-local`, v2.338.0, sha256 verified) runs from a terminal (Q5, no sudo).
+  - Its `.path` is a clean PATH (no conda or other-project venvs), and its `.env` sets `ADPULSE_HOME`, so Ansible reads `.env` and `deploy/state` from the real working copy instead of the job checkout.
+  - Deploy jobs share the `deploy` concurrency group.
+- **Why:** Deploys never happen for PRs or forks (verified: no CD run for the PR branch), and CI must pass first. Release history (`deploy/state`) must be shared between manual and CD deploys, or rollback would not know the previous tag.
+- **Alternatives:** Dependent jobs in one workflow (would put the self-hosted runner in the PR path).
+
+### D058: CI design
+- **Date:** 2026-10-07
+- **Decision:**
+  - 4 parallel jobs on ubuntu-latest: lint, test, build, security.
+  - Each job builds the images it needs: no artifact passing; wall time 2.4–5.3 min per job on the first run.
+  - Actions are pinned by commit SHA (checkout v7.0.1, setup-python v7.0.0, setup-terraform v4.0.1).
+  - Lint tools are pinned in `.github/ci-requirements.txt`.
+  - The Redis service container has no password, because services cannot pass a command (CI-only, ephemeral).
+  - Most steps call the same `make` targets used locally.
+- **Not done:** SARIF upload to code scanning, which needs GitHub Advanced Security on a private repo. The Trivy output is in the job log instead.
+
+### D059: Remove `gosu` from the Postgres image
+- **Date:** 2026-10-07
+- **Decision:** `rm -f /usr/local/bin/gosu` at build time; Postgres always runs as uid 999 (Terraform, and now the image test too).
+- **Why:** Trivy found 1 fixable CRITICAL (CVE-2025-68121, Go stdlib in gosu) and 21 fixable HIGH, all in that one binary. gosu only exists to drop root privileges in the entrypoint, which AdPulse never uses. After removal: 0 CRITICAL, 0 HIGH fixable; all 14 image checks still pass.
+
+### D060: Readiness gate in the rolling deploy
+- **Date:** 2026-10-07
+- **Decision:** After Docker health (liveness), each new replica must return `/readyz` 200 within 20 s before the old one is removed; otherwise the deploy fails and Ansible rolls back.
+- **Why:** The deploy-bad-release incident: a release that was alive but not ready replaced both staging replicas, and only the post-deploy smoke test caught it (MTTD 103.7 s). Verified afterwards with a locally built broken image: the deploy failed at replica 1's gate after 55 s and staging kept the good release.
+
+### D061: The test image pins `BROKEN_RELEASE=false`
+- **Date:** 2026-10-07
+- **Decision:** `ENV BROKEN_RELEASE=false` in the API image's test stage.
+- **Why:** Unit tests must run with controlled settings, and the rollback demo needed a defect that tests cannot see (an environment flag) but a real environment can. Without the pin, CI would have blocked the demo release before it reached staging.

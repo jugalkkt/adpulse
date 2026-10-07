@@ -11,7 +11,8 @@
 - **Phase 7: DONE** (2026-10-07). DoD passed. Both envs on release `7a6904c`.
 - **Phase 8: DONE** (2026-10-07). DoD passed. The healer is live (dry-run off).
 - **Phase 9: DONE** (2026-10-07). DoD passed. 13 chaos runs (10 scenarios in staging, a db-down re-run, a 2-run prod game day), each with an RCA. deploy-bad-release follows in Phase 10.
-- **Phase 10:** next (CI/CD). Starts with 🛑 Q5 (self-hosted runner) and Q6 (approval method).
+- **Phase 10: DONE** (2026-10-07). DoD passed. Both envs run `18a0065` (deployed by CD and promote). The runner is registered and runs from Jugal's terminal (`~/actions-runner/run.sh`).
+- **Phase 11:** next (security pass).
 
 ## Phase 0: Preflight
 
@@ -300,6 +301,28 @@ Raw logs of the failed attempts are kept in `incidents/raw/` (gitignored).
 - `chaos.py stop` on staging and prod: "leftover faults: none"; 0 role=chaos containers; 0 junk files.
 - All alerts resolved afterwards (Alertmanager: 0 active); smoke PASS in both envs.
 - The prod guard refused a run without --confirm-prod.
+
+## Phase 10: CI/CD with GitHub Actions
+
+### Questions (2026-10-07)
+- Q5: self-hosted runner OK, repo stays private. Runner mode: terminal (`./run.sh`, no sudo).
+- Q6: promote button (`workflow_dispatch`); required reviewers rejected by the plan (HTTP 422).
+
+### Built
+- Runner v2.338.0 in `~/actions-runner` (sha256 verified, registration token never printed), labels self-hosted/Linux/X64/adpulse-local; clean `.path`; `.env` ADPULSE_HOME (D057).
+- `.github/workflows/ci.yml` (lint, test, build, security), `cd.yml` (staging + auto-rollback), `promote.yml` (prod gate + auto-rollback); `.github/actionlint.yaml`; `.github/ci-requirements.txt`.
+- `scripts/scan.sh` + `make scan` / `make sbom`; Make lint-docker (hadolint), lint-actions (actionlint), lint-shell, lint-yaml, lint-static.
+- Security fix ahead of Phase 11: gosu removed (D059). Readiness gate in the deploy (D060). Test image pins BROKEN_RELEASE=false (D061). README runner notice and removal command. `docs/screenshots/README.md` list.
+
+### Phase 10 DoD (2026-10-07)
+- Push `b4a13d3` → **CI green on the first run** (lint 2m38s, test 2m23s, build 2m49s, security 5m18s) → CD: deploy-staging 216 s, smoke-staging 15 s → **Promote** → deploy-prod 61 s, smoke-prod 13 s. Both envs on b4a13d3.
+- The gate refused promoting `e7337dc` (not staging's release); prod stayed put.
+- **Rollback demo** (PR #1, BROKEN_RELEASE=true):
+  - PR CI and branch CI green; **no CD for the branch**. Merged as `0e7473d` → CI green → CD deployed it to staging.
+  - **Smoke FAIL (/readyz 503)** → automatic rollback (46 s) → post-rollback smoke PASS. Staging back on b4a13d3 (`rolled_back_from: 0e7473d`); **prod untouched**.
+  - Recorder: readyz 503 on 66 probes (12:53:46–12:55:16), 0 failed ad requests. MTTD 103.7 s, MTTR 150.7 s. RCA: `docs/rca/2026-10-07-1253-deploy-bad-release-staging.md`.
+  - Reverted (`18a0065`) → CI/CD → staging → promote → prod.
+- Screenshot list: `docs/screenshots/README.md` (Jugal captures them in Phase 12.12).
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.
