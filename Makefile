@@ -30,7 +30,7 @@ check: ## Print the machine report (OS, tools, ports)
 secrets: ## Create .env from .env.example (never overwrites values)
 	@bash scripts/gen_secrets.sh
 
-build: build-base build-api build-postgres build-healer ## Build all images tagged with the git SHA and dev
+build: build-base build-api build-postgres build-healer build-chaos-stress ## Build all images tagged with the git SHA and dev
 
 build-base: ## Build adpulse-base (Ubuntu + Puppet/OpenVox hardening)
 	docker build $(BUILD_FLAGS) --progress=plain \
@@ -47,6 +47,10 @@ build-healer: build-base ## Build adpulse-healer (FROM adpulse-base) and its tes
 	  -f docker/healer/Dockerfile --target runtime -t adpulse-healer:$(TAG) -t adpulse-healer:dev .
 	docker build $(BUILD_FLAGS) -q --build-arg BASE_IMAGE=adpulse-base:$(TAG) --build-arg GIT_SHA=$(TAG) \
 	  -f docker/healer/Dockerfile --target test -t adpulse-healer-test:$(TAG) -t adpulse-healer-test:dev .
+
+build-chaos-stress: build-base ## Build adpulse-chaos-stress (stress-ng for the cpu-hog scenario)
+	docker build $(BUILD_FLAGS) -q --build-arg BASE_IMAGE=adpulse-base:$(TAG) \
+	  -f docker/chaos-stress/Dockerfile -t adpulse-chaos-stress:$(TAG) -t adpulse-chaos-stress:dev .
 
 lock-healer: ## Re-lock healer Python dependencies with hashes
 	docker run --rm --user "$$(id -u):$$(id -g)" -e HOME=/tmp -e PIP_DEFAULT_TIMEOUT=120 -v "$(CURDIR)/healer:/w" -w /w adpulse-base:dev bash -euo pipefail -c '\
@@ -194,14 +198,22 @@ down: ## Destroy local stacks (asks first; label-scoped)
 	bash scripts/terraform.sh env prod destroy -input=false -auto-approve -var-file=prod.tfvars -var image_tag=$(TAG)
 	bash scripts/terraform.sh monitoring destroy -input=false -auto-approve -var image_tag=$(TAG)
 
-chaos: ## Run one chaos scenario: SCENARIO=<name> ENV=staging
-	$(call todo,Phase 9)
+CONFIRM_PROD ?=
+
+chaos: ## Run one chaos scenario: SCENARIO=<name> ENV=staging (prod needs CONFIRM_PROD=1)
+	/usr/bin/python3 chaos/chaos.py run $(SCENARIO) --env $(ENV) $(if $(CONFIRM_PROD),--confirm-prod,)
+
+chaos-list: ## List chaos scenarios
+	@/usr/bin/python3 chaos/chaos.py list
 
 chaos-stop: ## Remove all injected faults: ENV=staging
-	$(call todo,Phase 9)
+	/usr/bin/python3 chaos/chaos.py stop --env $(ENV)
 
-rca: ## Generate an RCA from an incident directory: ID=<dir>
-	$(call todo,Phase 9)
+rca: ## Generate an RCA from an incident directory: ID=incidents/<dir>
+	/usr/bin/python3 tools/rca.py $(ID)
+
+rca-summary: ## Rebuild docs/rca/SUMMARY.md from every incident timeline
+	/usr/bin/python3 tools/rca.py --summary
 
 aws-plan: ## Terraform plan for AWS
 	$(call todo,Phase 12)
