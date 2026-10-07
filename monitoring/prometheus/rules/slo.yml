@@ -1,0 +1,115 @@
+# SLOs for /v1/ad, per env (plan Phase 7, SHOULD):
+#   availability: 99.5% of requests are not 5xx       -> error budget 0.5%
+#   latency:      95% of requests complete in <=150ms -> error budget 5%
+# Multi-window, multi-burn-rate alerts (Google SRE workbook), with windows
+# as listed in the plan: fast = 1h AND 5m at 14.4x; slow = 6h AND 30m at 6x.
+# For a 30-day SLO, 14.4x for 1h burns 2% of the budget, 6x for 6h burns 5%.
+# This lab only runs for hours, so the "30 days" is notional; the windows are
+# the standard ones and simply need time to fill (docs/DECISIONS.md D036).
+groups:
+  - name: adpulse-slo-recording
+    interval: 15s
+    rules:
+      # ---- availability SLI: fraction of bad (5xx) requests
+      - record: env:slo_availability_errors:ratio_rate5m
+        expr: |
+          (
+            sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad", status=~"5.."}[5m]))
+            or sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad"}[5m])) * 0
+          )
+          / sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad"}[5m]))
+      - record: env:slo_availability_errors:ratio_rate30m
+        expr: |
+          (
+            sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad", status=~"5.."}[30m]))
+            or sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad"}[30m])) * 0
+          )
+          / sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad"}[30m]))
+      - record: env:slo_availability_errors:ratio_rate1h
+        expr: |
+          (
+            sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad", status=~"5.."}[1h]))
+            or sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad"}[1h])) * 0
+          )
+          / sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad"}[1h]))
+      - record: env:slo_availability_errors:ratio_rate6h
+        expr: |
+          (
+            sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad", status=~"5.."}[6h]))
+            or sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad"}[6h])) * 0
+          )
+          / sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad"}[6h]))
+
+      # ---- latency SLI: fraction of requests slower than 150ms
+      - record: env:slo_latency_errors:ratio_rate5m
+        expr: |
+          1 - sum by (env) (rate(adpulse_http_request_duration_seconds_bucket{route="/v1/ad", le="0.15"}[5m]))
+              / sum by (env) (rate(adpulse_http_request_duration_seconds_count{route="/v1/ad"}[5m]))
+      - record: env:slo_latency_errors:ratio_rate30m
+        expr: |
+          1 - sum by (env) (rate(adpulse_http_request_duration_seconds_bucket{route="/v1/ad", le="0.15"}[30m]))
+              / sum by (env) (rate(adpulse_http_request_duration_seconds_count{route="/v1/ad"}[30m]))
+      - record: env:slo_latency_errors:ratio_rate1h
+        expr: |
+          1 - sum by (env) (rate(adpulse_http_request_duration_seconds_bucket{route="/v1/ad", le="0.15"}[1h]))
+              / sum by (env) (rate(adpulse_http_request_duration_seconds_count{route="/v1/ad"}[1h]))
+      - record: env:slo_latency_errors:ratio_rate6h
+        expr: |
+          1 - sum by (env) (rate(adpulse_http_request_duration_seconds_bucket{route="/v1/ad", le="0.15"}[6h]))
+              / sum by (env) (rate(adpulse_http_request_duration_seconds_count{route="/v1/ad"}[6h]))
+
+      # ---- burn rates (error ratio / error budget), for dashboards
+      - record: env:slo_availability:burnrate1h
+        expr: env:slo_availability_errors:ratio_rate1h / 0.005
+      - record: env:slo_latency:burnrate1h
+        expr: env:slo_latency_errors:ratio_rate1h / 0.05
+
+      # ---- error budget remaining over the last 6h (1 = untouched, <0 = blown)
+      - record: env:slo_availability:error_budget_remaining6h
+        expr: 1 - env:slo_availability_errors:ratio_rate6h / 0.005
+      - record: env:slo_latency:error_budget_remaining6h
+        expr: 1 - env:slo_latency_errors:ratio_rate6h / 0.05
+
+  - name: adpulse-slo-alerts
+    rules:
+      - alert: ErrorBudgetBurnFast
+        expr: |
+          (env:slo_availability_errors:ratio_rate1h > 14.4 * 0.005 and env:slo_availability_errors:ratio_rate5m > 14.4 * 0.005)
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "{{ $labels.env }}: availability error budget burning fast"
+          description: "Errors are burning the 0.5% budget at >14.4x (1h and 5m windows). At this rate the monthly budget is gone in ~2 days."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/ErrorBudgetBurn.md
+      - alert: ErrorBudgetBurnFast
+        expr: |
+          (env:slo_latency_errors:ratio_rate1h > 14.4 * 0.05 and env:slo_latency_errors:ratio_rate5m > 14.4 * 0.05)
+        labels:
+          severity: critical
+          slo: latency
+        annotations:
+          summary: "{{ $labels.env }}: latency error budget burning fast"
+          description: "Slow (>150ms) requests are burning the 5% budget at >14.4x (1h and 5m windows)."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/ErrorBudgetBurn.md
+
+      - alert: ErrorBudgetBurnSlow
+        expr: |
+          (env:slo_availability_errors:ratio_rate6h > 6 * 0.005 and env:slo_availability_errors:ratio_rate30m > 6 * 0.005)
+        labels:
+          severity: warning
+          slo: availability
+        annotations:
+          summary: "{{ $labels.env }}: availability error budget burning steadily"
+          description: "Errors are burning the 0.5% budget at >6x (6h and 30m windows)."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/ErrorBudgetBurn.md
+      - alert: ErrorBudgetBurnSlow
+        expr: |
+          (env:slo_latency_errors:ratio_rate6h > 6 * 0.05 and env:slo_latency_errors:ratio_rate30m > 6 * 0.05)
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: "{{ $labels.env }}: latency error budget burning steadily"
+          description: "Slow (>150ms) requests are burning the 5% budget at >6x (6h and 30m windows)."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/ErrorBudgetBurn.md

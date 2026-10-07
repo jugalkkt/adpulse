@@ -1,6 +1,25 @@
-# Phase 5 bootstrap config: a receiver that drops everything. Phase 7 adds the
-# healer webhook, grouping and inhibition rules.
+# AdPulse Alertmanager. Every alert goes to the healer (auto-remediation and
+# escalation). No chat webhook (Q4 answer: none); to add one later, add a
+# receiver with webhook_configs.url_file pointing at a mounted secret file.
+global:
+  resolve_timeout: 1m
+
 route:
-  receiver: "null"
+  receiver: healer
+  group_by: [alertname, env]
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 15m
+
 receivers:
-  - name: "null"
+  - name: healer
+    webhook_configs:
+      - url: http://healer:9100/alertmanager
+        send_resolved: true
+        max_alerts: 0
+
+inhibit_rules:
+  # A dead database explains the errors and fallback ads; page for the cause only.
+  - source_matchers: [alertname="AdPulseDatabaseDown"]
+    target_matchers: [alertname=~"AdPulseHighErrorRate|AdPulseServingFallbackAds"]
+    equal: [env]

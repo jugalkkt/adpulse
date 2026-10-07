@@ -1,10 +1,99 @@
-# Phase 5 bootstrap config: self-scrape only. Phase 7 replaces this with the
-# full scrape config, rules, SLOs and the Alertmanager connection.
+# AdPulse Prometheus. 5s scrape/evaluation intervals are a demo choice so
+# chaos experiments show up within seconds; production would use 15-30s
+# (docs/DECISIONS.md D035). Prometheus joins the adpulse-monitoring network
+# plus every env network, so it can resolve replicas and exporters by name.
 global:
   scrape_interval: 5s
+  scrape_timeout: 4s
   evaluation_interval: 5s
 
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
 scrape_configs:
+  # API replicas: Docker DNS returns one A record per container carrying the
+  # network alias api-<env>, so new, replaced and scaled replicas are found
+  # automatically.
+  - job_name: api
+    dns_sd_configs:
+      - names: ["api-staging", "api-prod"]
+        type: A
+        port: 8000
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: [__meta_dns_name]
+        regex: api-(.+)
+        target_label: env
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter-staging:9187"]
+        labels: {env: staging}
+      - targets: ["postgres-exporter-prod:9187"]
+        labels: {env: prod}
+
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter-staging:9121"]
+        labels: {env: staging}
+      - targets: ["redis-exporter-prod:9121"]
+        labels: {env: prod}
+
+  # Host metrics (and the backup textfile metrics, which carry their own env label).
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels: {env: host}
+    metric_relabel_configs:
+      # Textfile metrics bring env=<staging|prod>; keep it (honor it over the static "host").
+      - source_labels: [__name__, exported_env]
+        regex: adpulse_backup_.+;(.+)
+        target_label: env
+        replacement: $1
+      - regex: exported_env
+        action: labeldrop
+
+  - job_name: cadvisor
+    scrape_interval: 10s
+    scrape_timeout: 8s
+    static_configs:
+      - targets: ["cadvisor:8080"]
+        labels: {env: host}
+    metric_relabel_configs:
+      # Only keep series for AdPulse containers (drops other containers and the root cgroup).
+      - source_labels: [container_label_com_adpulse_project, id]
+        regex: ;.+
+        action: drop
+      # Container env/role labels become first-class labels.
+      - source_labels: [container_label_com_adpulse_env]
+        regex: (.+)
+        target_label: env
+      - source_labels: [container_label_com_adpulse_role]
+        target_label: role
+      - source_labels: [name]
+        target_label: container
+      # cAdvisor keeps the name a container had at start, so a renamed
+      # rolling-update container would show as api-<env>-N-next. Rebuild the
+      # stable name from the com.adpulse.replica label instead.
+      - source_labels: [role, env, container_label_com_adpulse_replica]
+        regex: api;(.+);(.+)
+        target_label: container
+        replacement: api-$1-$2
+
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]
+        labels: {env: monitoring}
+
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]
+        labels: {env: monitoring}
+
+# The healer job is added in Phase 8, when the healer exists (otherwise
+# TargetMissing would fire for a service that is not deployed yet).
