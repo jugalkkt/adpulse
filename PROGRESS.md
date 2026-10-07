@@ -3,7 +3,8 @@
 ## Current status
 - **Phase 0: DONE** (2026-10-07). DoD passed.
 - **Phase 1: DONE** (2026-10-07). DoD passed. Repo: https://github.com/jugalkkt/adpulse (private).
-- **Phase 2:** in progress (base image with Puppet/OpenVox).
+- **Phase 2: DONE** (2026-10-07). DoD passed.
+- **Phase 3:** in progress (AdPulse API).
 
 ## Phase 0: Preflight
 
@@ -70,6 +71,29 @@
 - `gh repo view`: jugalkkt/adpulse, PRIVATE, default branch main.
 - `.env` is mode 600; `git ls-files | grep -c '^.env$'` prints 0.
 - `pre-commit run --all-files`: all hooks pass.
+
+## Phase 2: Base image with Puppet (OpenVox)
+
+### Built (2026-10-07)
+- `config/puppet/`:
+  - `site.pp` includes `adpulse::base`.
+  - `adpulse::base`: user/group, directories, packages, umask, filesystem hardening via the `adpulse-fs-hardening` check/fix script, hardening report.
+  - `adpulse::host`: stub (TODO Phase 12).
+  - No external modules (no stdlib), so no Forge downloads.
+- `docker/base/Dockerfile`: `ubuntu:24.04` pinned by digest, OpenVox 8.29.0, two applies in one layer, then the agent is purged (D009).
+- `docker/tools/puppet.Dockerfile` (puppet-lint 5.1.1); `.dockerignore` allow-list (D011).
+- Make targets: `build-base`, `lint-puppet`, `tools-puppet`; `build` and `lint` call them.
+- Versions: OpenVox 8 rather than 9 (D008). Empty setuid allow-list (D010).
+
+### Phase 2 DoD (2026-10-07)
+- `make build-base`: exit 0 on the first try. Image `adpulse-base:b033731` and `:dev`, 201 MB, labelled `com.adpulse.project=adpulse`.
+- `docker run --rm adpulse-base:dev id adpulse` → `uid=10001(adpulse) gid=10001(adpulse)`.
+- `hardening-report.txt` prints 7 controls.
+- `make lint-puppet` → "puppet lint: clean". Sanity probe: a deliberately bad .pp file gives 1 error and 4 warnings, exit 1, so the linter really runs.
+- **Idempotency:**
+  - Apply #1 changed 26 resources (created user/group/dirs, installed tzdata/python3/python3-venv, set the umask, and stripped setuid/setgid from 12 binaries).
+  - Apply #2: "Applied catalog in 1.31 seconds" with no change notices, exit 0. The log is in the image at `/etc/adpulse/puppet-idempotency.log`.
+- In the image: 0 setuid/setgid files, `fs-hardening check` OK, no OpenVox packages or `/opt/puppetlabs`, 0 apt list files. Python 3.12.3.
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.

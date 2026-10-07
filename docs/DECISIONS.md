@@ -54,3 +54,27 @@ Format: **Date / Decision / Why / Alternatives**
 - **Why:** On this network (IIIT Kottayam), `proxy.golang.org` is intercepted with the campus TLS certificate, so the upstream golang gitleaks hook cannot build. shellcheck-py's GitHub-release download got "connection reset", and IPv6 was unreachable. gitleaks' generic-api-key rule flags 40-hex-char fingerprints, but those are public by design, not secrets.
 - **Alternatives:** upstream `gitleaks-docker` hook (it uses an unpinned `latest` image, which breaks R5); installing Go and gitleaks on the host (more host clutter, and still blocked).
 - **Watch out:** later phases that fetch Go modules or GitHub release assets may hit the same network blocks. Prefer pinned container images.
+
+### D008: OpenVox 8.29.0 rather than 9.0.0
+- **Date:** 2026-10-07
+- **Decision:** Pin `openvox-agent=8.29.0-1+ubuntu24.04` from the `openvox8` repo.
+- **Why:** OpenVox 9.0.0 went GA on 2026-10-02, five days before this build. The official install docs (voxpupuli.org/openvox/install) still point to `openvox8-release`, and puppet-lint 5.1.1 targets the 8.x language. 8.29.0 is the latest release of the mature, stable line.
+- **Alternatives:** 9.0.0. It's newer, but the ecosystem and docs lag, and a fresh .0 major is riskier. A good "what I'd do next" upgrade item.
+
+### D009: Base image applies Puppet in a single layer, then purges the agent
+- **Date:** 2026-10-07
+- **Decision:** One `RUN` installs OpenVox, runs `puppet apply` twice, then purges the agent, its repo, `/opt/puppetlabs` and the apt lists. The Puppet code comes in through a read-only `RUN --mount=type=bind`, so it never lands in a layer.
+- **Why:** A purge in a later layer would not shrink the image, and the agent's Ruby gems would show up in Trivy scans. The second apply must exit 0 (no changes), or the build fails. That is the plan's idempotency check, and the log is kept at `/etc/adpulse/puppet-idempotency.log`.
+- **Alternatives:** A multi-stage build copying the filesystem out (more complex); keeping the agent (bigger image, more CVEs).
+
+### D010: Empty setuid/setgid allow-list in the base image
+- **Date:** 2026-10-07
+- **Decision:** All 12 setuid/setgid binaries are stripped (su, passwd, mount, umount, newgrp, chsh, chfn, gpasswd, chage, expiry, unix_chkpwd, pam_extrausers_chkpwd).
+- **Why:** Containers run as the non-root `adpulse` user with `no-new-privileges` and never log in or switch users, so none of these are needed. Stripping them removes privilege-escalation paths. The allow-list stays a class parameter in case a future image needs one.
+- **Alternatives:** Keep `su` and `passwd` "just in case" (no use in a container).
+
+### D011: `.dockerignore` is an allow-list
+- **Date:** 2026-10-07
+- **Decision:** `.dockerignore` excludes everything (`*`), then re-includes only the directories builds need.
+- **Why:** This guarantees `.env`, Terraform state, `.git` and incident data can never be copied into an image, even by a careless `COPY . .`.
+- **Alternatives:** A deny-list (easy to forget a new secret file).

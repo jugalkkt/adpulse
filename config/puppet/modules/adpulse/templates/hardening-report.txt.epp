@@ -1,0 +1,12 @@
+<%- | Integer $uid, Array[String] $packages, String $umask, Array[String] $suid_allowlist | -%>
+AdPulse base image hardening report
+Managed by Puppet (OpenVox), class adpulse::base
+
+Controls applied:
+1. Unprivileged service user: adpulse (uid/gid <%= $uid %>), shell /usr/sbin/nologin, home /opt/adpulse
+2. Directories: /opt/adpulse (adpulse, 0750), /etc/adpulse (root, 0755), /var/log/adpulse (adpulse, 0750)
+3. Required packages present: <%= $packages.join(', ') %>
+4. Default umask in /etc/login.defs: <%= $umask %>
+5. setuid/setgid bits removed from all binaries except the allow-list: <%= $suid_allowlist.empty ? { true => '(empty)', default => $suid_allowlist.join(', ') } %>
+6. No world-writable files outside /tmp and /var/tmp
+7. Configuration-management agent (OpenVox) and apt lists purged after apply

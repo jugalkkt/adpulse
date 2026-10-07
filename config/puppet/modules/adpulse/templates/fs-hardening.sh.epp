@@ -1,0 +1,38 @@
+<%- | Array[String] $suid_allowlist | -%>
+#!/bin/sh
+# Managed by Puppet (adpulse::base). Do not edit.
+#   check : exit 1 if any violation exists (used as the exec `unless`)
+#   fix   : remove setuid/setgid bits (except the allow-list) and
+#           world-write bits from files outside /tmp; print what changed
+set -eu
+
+ALLOW='<%= $suid_allowlist.join(' ') %>'
+
+allowed() {
+  for a in $ALLOW; do [ "$1" = "$a" ] && return 0; done
+  return 1
+}
+
+suid_files() {
+  find / -xdev -type f -perm /6000 2>/dev/null | while read -r f; do
+    allowed "$f" || echo "$f"
+  done
+}
+
+ww_files() {
+  find / -xdev -path /tmp -prune -o -path /var/tmp -prune -o -type f -perm -0002 -print 2>/dev/null
+}
+
+case "${1:-}" in
+  check)
+    [ -z "$(suid_files)" ] && [ -z "$(ww_files)" ]
+    ;;
+  fix)
+    suid_files | while read -r f; do chmod ug-s "$f"; echo "removed setuid/setgid: $f"; done
+    ww_files | while read -r f; do chmod o-w "$f"; echo "removed world-write: $f"; done
+    ;;
+  *)
+    echo "usage: $0 check|fix" >&2
+    exit 2
+    ;;
+esac
