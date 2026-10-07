@@ -5,12 +5,12 @@ FROM postgres:18.6-trixie@sha256:fc973eb97c9fd04bfa1840e0f510719a584ccb3be8debfe
 
 ARG CINC_VERSION=19.3.14
 ARG CINC_DEB_SHA256=a6094f97527371b113acfda7bcceecc4d7113a00f71031d709bbe8367aeefebd
-ARG GIT_SHA=dev
 
+# No git-SHA label on purpose: the image ID must only change when its content
+# changes, otherwise every commit would make Terraform restart Postgres (D029).
 LABEL com.adpulse.project="adpulse" \
       com.adpulse.role="db" \
-      org.opencontainers.image.title="adpulse-postgres" \
-      org.opencontainers.image.revision="${GIT_SHA}"
+      org.opencontainers.image.title="adpulse-postgres"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 

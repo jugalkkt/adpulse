@@ -59,7 +59,9 @@ http {
             proxy_set_header X-Forwarded-Proto $scheme;
             add_header X-Request-ID $req_id always;
 
-            proxy_connect_timeout 2s;
+            # Connects on a Docker network take <1 ms; a dead replica IP (removed
+            # during a rolling deploy) should fail over fast, not after 2s.
+            proxy_connect_timeout 500ms;
             proxy_send_timeout    2s;
             proxy_read_timeout    2s;
             proxy_next_upstream error timeout http_502 http_503;

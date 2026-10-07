@@ -4,12 +4,12 @@ FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884
 
 ARG OPENVOX_RELEASE=8
 ARG OPENVOX_AGENT_VERSION=8.29.0-1+ubuntu24.04
-ARG GIT_SHA=dev
 
+# No git-SHA label: the base only changes when its content does, so the API
+# build cache (pip layer) survives commits (docs/DECISIONS.md D029).
 LABEL com.adpulse.project="adpulse" \
       com.adpulse.role="base" \
-      org.opencontainers.image.title="adpulse-base" \
-      org.opencontainers.image.revision="${GIT_SHA}"
+      org.opencontainers.image.title="adpulse-base"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
