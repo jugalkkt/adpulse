@@ -90,7 +90,7 @@ def rca_path(tl: dict) -> Path:
 def render(tl: dict, ev: dict, incident_dir: Path) -> str:
     v = ev["values"]
     events = {e["event"]: e for e in tl["events"]}
-    fired = "alert_firing" in events
+    fired = tl.get("mttd_s") is not None
     p = tl["probes"]
     total = v.get("requests") or 0
     pct_5xx = (v["requests_5xx"] or 0) / total * 100 if total else None
@@ -204,7 +204,7 @@ def summary() -> Path:
     for f in sorted((ROOT / "incidents").glob("*/timeline.json")):
         tl = json.loads(f.read_text())
         heal = tl["heal"][0] if tl["heal"] else None
-        fired = any(e["event"] == "alert_firing" for e in tl["events"])
+        fired = tl.get("mttd_s") is not None
         rca = rca_path(tl)
         ev_file = f.parent / "evidence.json"
         api = "n/a"

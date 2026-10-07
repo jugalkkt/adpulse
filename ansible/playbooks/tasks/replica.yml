@@ -94,6 +94,32 @@
               health={{ next_info.container.State.Health.Status | default('none') }}).
               Last logs: {{ failed_logs.stdout_lines | default([]) | join(' | ') }}
 
+    # Docker health is liveness (/healthz). A release can be alive but not ready
+    # (e.g. BROKEN_RELEASE): gate on /readyz before the old replica is removed,
+    # so a bad release is stopped at the first replica (RCA deploy-bad-release).
+    - name: "Readiness gate: /readyz must return 200 | {{ replica_name }}"
+      ansible.builtin.command:
+        argv: [docker, exec, "api-{{ env }}-{{ replica_index }}-next", curl, -s, -o, /dev/null, -w, "%{http_code}",
+               "http://127.0.0.1:8000/readyz"]
+      register: readiness
+      until: readiness.stdout == '200'
+      retries: 10
+      delay: 2
+      changed_when: false
+      failed_when: false
+
+    - name: "Fail and clean up if the new container is not ready | {{ replica_name }}"
+      when: readiness.stdout != '200'
+      block:
+        - name: "Remove the not-ready container | {{ replica_name }}"
+          community.docker.docker_container:
+            name: "api-{{ env }}-{{ replica_index }}-next"
+            state: absent
+
+        - name: "Fail: release is alive but not ready | {{ replica_name }}"
+          ansible.builtin.fail:
+            msg: "api-{{ env }}-{{ replica_index }} with {{ deploy_tag }} is healthy but /readyz returned {{ readiness.stdout }} for 20s."
+
     - name: "Let nginx's DNS cache (valid=5s) see the new container | {{ replica_name }}"
       ansible.builtin.pause:
         seconds: 6

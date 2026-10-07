@@ -1,0 +1,100 @@
+{
+  "id": "20261007T125318Z-deploy-bad-release-staging",
+  "scenario": "deploy-bad-release",
+  "layer": "process / CI",
+  "env": "staging",
+  "description": "Merged a release with BROKEN_RELEASE=true baked into the API image (/readyz returns 503); CD deployed it to staging",
+  "expected_alert": "staging smoke test (CD)",
+  "expected_heal": "automatic rollback (make rollback ENV=staging)",
+  "human_stop": false,
+  "detector": "CD smoke test (scripts/smoke_test.sh staging), not a Prometheus alert",
+  "events": [
+    {
+      "event": "merged_to_main",
+      "ts": "2026-10-07T12:46:47.000Z",
+      "t_plus_s": -391.0
+    },
+    {
+      "event": "ci_passed",
+      "ts": "2026-10-07T12:50:24.000Z",
+      "t_plus_s": -174.0
+    },
+    {
+      "event": "injected",
+      "ts": "2026-10-07T12:53:18.000Z",
+      "t_plus_s": 0.0
+    },
+    {
+      "event": "first_failed_probe",
+      "ts": "2026-10-07T12:53:46.785Z",
+      "t_plus_s": 28.8
+    },
+    {
+      "event": "deploy_finished",
+      "ts": "2026-10-07T12:54:15.000Z",
+      "t_plus_s": 57.0
+    },
+    {
+      "event": "alert_firing",
+      "ts": "2026-10-07T12:55:01.688Z",
+      "t_plus_s": 103.7
+    },
+    {
+      "event": "heal_started",
+      "ts": "2026-10-07T12:55:02.000Z",
+      "t_plus_s": 104.0
+    },
+    {
+      "event": "last_failed_probe",
+      "ts": "2026-10-07T12:55:16.615Z",
+      "t_plus_s": 118.6
+    },
+    {
+      "event": "heal_finished",
+      "ts": "2026-10-07T12:55:48.224Z",
+      "t_plus_s": 150.2
+    },
+    {
+      "event": "recovered",
+      "ts": "2026-10-07T12:55:48.726Z",
+      "t_plus_s": 150.7
+    }
+  ],
+  "other_alerts": [],
+  "mttd_s": 103.7,
+  "mttr_s": 150.7,
+  "heal": [
+    {
+      "ts": "2026-10-07T12:55:48.224Z",
+      "action": "make rollback ENV=staging (CD smoke-staging job)",
+      "result": "success",
+      "duration_s": 46.2,
+      "attempt": 1,
+      "extra_vars": {
+        "env": "staging",
+        "rolled_back_from": "0e7473d",
+        "to": "b4a13d3"
+      },
+      "stdout_tail": "PLAY RECAP: localhost ok=35 changed=7 failed=0; post-rollback smoke: /readyz 200, 20/20 /v1/ad valid, p95 4 ms, /metrics OK"
+    }
+  ],
+  "probes": {
+    "interval_s": 1,
+    "total": 138,
+    "failed_non_200": 0,
+    "fallback": 0,
+    "slow_over_250ms": 4,
+    "max_latency_s": 0.503334,
+    "readyz_non_200": 66
+  },
+  "github_runs": {
+    "ci": "https://github.com/jugalkkt/adpulse/actions/runs/37623476158",
+    "cd": "https://github.com/jugalkkt/adpulse/actions/runs/37623919061",
+    "pr": "https://github.com/jugalkkt/adpulse/pull/1",
+    "revert_commit": "18a0065"
+  },
+  "window": {
+    "start": "2026-10-07T12:53:18.000Z",
+    "end": "2026-10-07T12:55:48.726Z"
+  }
+}

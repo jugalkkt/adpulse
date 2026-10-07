@@ -1,0 +1,1 @@
+Detected by the CD smoke test, not an alert; prod untouched. Readiness was 503 on 66 probes; 0 ad requests failed.
