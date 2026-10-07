@@ -131,7 +131,17 @@ lint-ansible: ## ansible-lint
 	cd ansible && ANSIBLE_COLLECTIONS_PATH="$(ANSIBLE_COLLECTIONS)" ansible-lint playbooks/
 
 up: ## From zero to everything running (both envs + monitoring)
-	$(call todo,Phase 6-8)
+	$(MAKE) secrets
+	$(MAKE) build
+	$(MAKE) monitoring
+	$(MAKE) infra ENV=staging
+	$(MAKE) infra ENV=prod
+	$(MAKE) monitoring
+	$(MAKE) deploy ENV=staging
+	$(MAKE) deploy ENV=prod
+	$(MAKE) smoke ENV=staging
+	$(MAKE) smoke ENV=prod
+	@$(MAKE) --no-print-directory urls
 
 down: ## Destroy local stacks (asks first; label-scoped)
 	@read -r -p "Destroy local staging, prod and monitoring stacks (data volumes included)? Type yes: " a; [ "$$a" = yes ] || { echo aborted; exit 1; }

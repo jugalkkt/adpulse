@@ -17,6 +17,8 @@ Every tool, image and library, pinned exactly (plan rule R5). Looked up at build
 | Ansible (package) | 14.5.0 (ansible-core 2.21.5) | pipx, Python 3.13.7 |
 | ansible-lint | 26.9.0 | pipx |
 | pre-commit | 4.6.2 | pipx |
+| community.docker (Ansible collection) | 5.4.0 | bundled with ansible 14.5.0 |
+| requests (in the ansible pipx venv) | 2.34.2 | `pipx inject ansible requests==2.34.2` |
 | git | 2.51.0 | Ubuntu |
 | GNU Make | 4.4.1 | Ubuntu |
 | jq | 1.8.1 | Ubuntu (`/usr/bin/jq`; conda's jq 1.6 comes first on PATH, so scripts call `/usr/bin/jq`) |

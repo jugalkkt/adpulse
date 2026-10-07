@@ -194,3 +194,42 @@ Starlette 1.7 warns that `httpx` with its TestClient is deprecated in favour of 
 - **Decision:** nginx returns 404 for `/metrics` and `/admin/` in every env. Prometheus scrapes replicas directly on the env network, and chaos tooling calls replicas directly (`docker exec`).
 - **Why:** The only published entry point should expose the product API, nothing internal, especially on AWS.
 - **Alternatives:** Protect them with auth at nginx.
+
+### D029: Reproducible image IDs (no provenance attestation, no SHA label on base/postgres)
+- **Date:** 2026-10-07
+- **Decision:** Every `docker build` uses `--provenance=false`. The `adpulse-base` and `adpulse-postgres` images carry no git-SHA label; only `adpulse-api` (the release artifact) records `GIT_SHA`.
+- **Why:** BuildKit's default provenance attestation gave every build a new image ID even when every layer was cached. Combined with the SHA label, Terraform recreated Postgres and backup-agent on **every commit** (observed: "4 added, 4 destroyed" after a commit that only changed nginx config). Now two builds give the same ID, and a new commit only replaces the stateless loadgen.
+- **Alternatives:** Pin Terraform to a separately versioned DB image tag (more bookkeeping); `ignore_changes = [image]` (would hide real DB image updates). Supply-chain metadata comes from a Trivy SBOM in Phase 11 instead.
+
+### D030: Migrations are expand-only; rollback does not migrate down
+- **Date:** 2026-10-07
+- **Decision:** `rollback.yml` only rolls the replicas back. Migrations must be additive (expand/contract): a release never drops or renames something the previous release still uses.
+- **Why:** Down-migrations are risky and rarely tested. With additive migrations, the previous release runs fine on the newer schema, which is what makes an instant rollback safe.
+- **Alternatives:** Paired down-migrations.
+
+### D031: Zero-downtime rolling update with fixed replica names
+- **Date:** 2026-10-07
+- **Decision:** Per replica: start `api-<env>-N-next` with the same network alias → wait for Docker health (60 s timeout) → pause 6 s → stop the old container (SIGTERM, 15 s grace, uvicorn drains) → `docker rename` next → `api-<env>-N` → pause 6 s. A replica already healthy on the target tag is skipped, so re-running a deploy is a no-op.
+- **Why:** The alias makes old and new serve side by side, so capacity never drops. The pauses match nginx's `resolver valid=5s`:
+  - Without the first pause, nginx might not know about the new replica yet.
+  - Without the second, a smoke test right after the deploy hit a dead IP. That was observed: post-deploy p95 was 509 ms and 503 ms, which failed the 300 ms check. With it, post-deploy p95 is 4 ms.
+  - Fixed names keep the healer's and chaos tool's targets stable.
+- **Measured:** 0 failed requests in every run (6654, 5765 and 4613 requests during deploys, 4328 during a rollback, 2749 during a failed deploy with auto-rollback).
+- **Alternatives:** Blue-green with a second alias and an nginx reload (more moving parts for the same result here).
+
+### D032: nginx `proxy_connect_timeout 500ms` (read/send stay 2 s)
+- **Date:** 2026-10-07
+- **Decision:** The connect timeout is lowered from 2 s to 500 ms.
+- **Why:** During a rolling update, nginx can briefly still hold the IP of a removed replica. Connects to a vanished IP hang until the timeout, then `proxy_next_upstream` retries on a live replica. Measured in the first zero-downtime run, 32 requests waited about 2 s each. After the change, the slowest request in the window was 0.505 s. On a local Docker network a real connect takes well under 1 ms.
+- **Next step (not done):** Drain replicas before removal (e.g. a lower resolver TTL, or nginx-plus-style active health checks) so even those 0.5 s retries disappear.
+
+### D033: Ansible `group_vars` live next to the playbooks
+- **Date:** 2026-10-07
+- **Decision:** `ansible/playbooks/group_vars/all/main.yml` (the plan's layout showed `ansible/group_vars/`).
+- **Why:** Ansible only loads `group_vars` adjacent to the inventory or to the playbook. Playbook-adjacent works for both the local and the AWS inventory without duplication.
+- **Alternatives:** A copy per inventory.
+
+### D034: ansible-lint runs with the collections from the ansible pipx venv
+- **Date:** 2026-10-07
+- **Decision:** `make lint-ansible` sets `ANSIBLE_COLLECTIONS_PATH` to the `ansible` pipx venv's site-packages. The lint passes the strictest `production` profile with 0 skips.
+- **Why:** ansible-lint is its own pipx app with only ansible-core, so `community.docker` modules were "unknown". The `requests` library was injected into the ansible venv (`pipx inject ansible requests==2.34.2`), which the community.docker modules need.

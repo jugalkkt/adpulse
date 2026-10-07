@@ -7,7 +7,8 @@
 - **Phase 3: DONE** (2026-10-07). DoD passed.
 - **Phase 4: DONE** (2026-10-07). DoD passed.
 - **Phase 5: DONE** (2026-10-07). DoD passed. Local staging, prod and monitoring stacks are **running**.
-- **Phase 6:** next (Ansible releases, rollback, zero-downtime).
+- **Phase 6: DONE** (2026-10-07). DoD passed. Both envs run release `0b5f3a9` with 2 healthy replicas each.
+- **Phase 7:** next (monitoring, alerting, dashboards, SLOs). Starts with 🛑 Q4 (alert webhook?).
 
 ## Phase 0: Preflight
 
@@ -171,6 +172,30 @@
 - Toxiproxy: proxies postgres :15432 → postgres-staging:5432 and redis :16379 → redis-staging:6379 enabled.
 - Backups running; node-exporter exposes `adpulse_backup_*{env="staging"|"prod"}` from the textfile volume.
 - Memory limits: 3712 MB across 21 containers; plus 4 API replicas × 256 MB (Phase 6) = **4736 MB, under the 6144 MB cap**.
+
+## Phase 6: Ansible releases, rollback, zero-downtime
+
+### Built (2026-10-07)
+- `ansible/ansible.cfg` (yaml result format, no retry files) and `inventories/local/hosts.yml`.
+- Variables live in `playbooks/group_vars/all/main.yml` (D033).
+- Playbooks: `deploy.yml` (silence → migrate → rolling update → state → expire silence; rescue = auto-rollback + fail), `rollback.yml`, `migrate.yml`, `status.yml`.
+- Task files: load_secrets (from .env, no_log), replica (D031), rolling_update, migrate (one-shot container, always removed), silence_create/expire, read/write_state.
+- `scripts/smoke_test.sh`, `scripts/check_zero_downtime.sh`.
+- Make targets: `deploy`, `rollback`, `migrate`, `status`, `smoke`, `lint-ansible`, and the full **`make up`**.
+- Also fixed along the way: reproducible image IDs (D029) and nginx connect timeout (D032).
+
+### Phase 6 DoD (2026-10-07)
+- `make deploy ENV=staging` and `ENV=prod`: first deploy applied migrations 001_init and 002_seed in each env. Current release `0b5f3a9` in both.
+- `make smoke`: PASS in both envs (/readyz 200, 20/20 valid, p95 2–59 ms, /metrics on a replica).
+- **Zero downtime:** deploy during the request loop → 0 failed requests in every run:
+  - f5bded1→da5499b: 6654/6654 OK (32 requests waited ~2 s before failover → D032)
+  - →1d25438: 5765/5765 OK, max latency 0.505 s
+  - →0b5f3a9: 4613/4613 OK, smoke right after the deploy p95 4 ms
+- `make rollback ENV=staging` (1d25438 → da5499b) under load: 4328/4328 OK. State swapped, smoke PASS.
+- Auto-rollback: a deliberately broken image (`crashtest`) failed at migration → rescue rolled back to da5499b, the play failed with a clear message, 2749/2749 requests OK, no leftover containers (after the fix).
+- Idempotent redeploy of the same tag: both replicas untouched (19 tasks skipped).
+- `make lint-ansible`: Passed, 0 failures, 0 warnings, profile **production**.
+- `make up` on the running system: exit 0 in 34 s, both smoke tests PASS. (The from-scratch `make up` test is part of final acceptance.)
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.
