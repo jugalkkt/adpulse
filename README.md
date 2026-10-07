@@ -168,11 +168,6 @@ make help                                # every target
 - **Promote** (`.github/workflows/promote.yml`): the manual approval gate. *Actions → Promote to prod → Run workflow* deploys the release staging currently runs, then smoke-tests prod and rolls back automatically if that fails.
 
 ### Self-hosted runner: security notice
-A self-hosted runner executes workflow code on this laptop, with access to Docker (root-equivalent) and the `.env` secrets.
-- The repository **must stay private** while the runner is registered.
-- Deploy jobs never run for pull requests: CD only runs for a successful CI run of a push to `main` in this repository, and promote only on manual dispatch.
-- **Before making the repo public, remove the runner:**
-  ```bash
-  cd ~/actions-runner
-  ./config.sh remove --token "$(gh api -X POST repos/jugalkkt/adpulse/actions/runners/remove-token --jq .token)"
-  ```
+CD and Promote ran on a self-hosted runner on the developer's laptop (with Docker access and the `.env` secrets) while the repo was private. **That runner was removed before the repo was made public**, so those two workflows no longer have anywhere to run. CI still runs on GitHub-hosted runners.
+- Never register a self-hosted runner on a **public** repo: a pull request from a fork could run code on that machine.
+- To use CD again, fork the repo as **private** and register your own runner (labels `self-hosted, Linux, X64, adpulse-local`).
