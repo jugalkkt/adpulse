@@ -56,7 +56,7 @@ resource "aws_route_table_association" "public" {
 # bypass ufw on the host; docs/SECURITY.md).
 resource "aws_security_group" "host" {
   name        = "adpulse-host"
-  description = "AdPulse host: SSH and HTTP from Jugal's IP only"
+  description = "AdPulse host - SSH and HTTP from the operator IP only"
   vpc_id      = aws_vpc.this.id
   tags        = { Name = "adpulse-host" }
 }

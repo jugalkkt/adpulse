@@ -13,7 +13,7 @@
 - **Phase 9: DONE** (2026-10-07). DoD passed. 13 chaos runs (10 scenarios in staging, a db-down re-run, a 2-run prod game day), each with an RCA. deploy-bad-release follows in Phase 10.
 - **Phase 10: DONE** (2026-10-07). DoD passed. Both envs run `18a0065` (deployed by CD and promote). The runner is registered and runs from Jugal's terminal (`~/actions-runner/run.sh`).
 - **Phase 11: DONE** (2026-10-07). DoD passed. Both envs on `cdee903` (rolled out with `make up` under a silence).
-- **Phase 12:** next (AWS). Starts with 🧑 USER ACTIONS 12.1–12.2 (console: MFA, budget, IAM user, `aws configure`), then 🛑 Q7/Q8/Q9/Q10.
+- **Phase 12: IN PROGRESS.** ⚠️ **AWS RESOURCES ARE RUNNING** (since 15:28–15:29 UTC 2026-10-07): instance `i-09a1cb3cf4c8bdef7` (c7i-flex.large, ap-south-1a, 13.126.89.199) + VPC/subnet/IGW/RT/SG/key pair. **Must be destroyed today** (`terraform -chdir=infra/terraform/aws destroy -var my_ip=<ip>`, after `envs/aws` is destroyed if it exists).
 
 ## Phase 0: Preflight
 
@@ -345,7 +345,15 @@ Raw logs of the failed attempts are kept in `incidents/raw/` (gitignored).
 ### Q7 (2026-10-07)
 - Latency from the laptop (median HTTPS first byte; ping blocked; TCP connect times were a meaningless 3 ms because a transparent proxy on the network answers the handshake): ap-south-2 107 ms, **ap-south-1 128 ms**, ap-southeast-1 201 ms, me-central-1 283 ms.
 - Jugal chose **ap-south-1 (Mumbai)**.
-- Next: 🧑 12.1–12.2 (root MFA, check plan/credits, zero-spend budget, IAM user adpulse-cli with AmazonEC2FullAccess, access key, `aws configure --profile adpulse`), then 12.3 identity check, Q8 (instance type + prices).
+- 12.1–12.2 done by Jugal (root MFA, zero-spend budget, IAM user adpulse-cli + AmazonEC2FullAccess, `aws configure --profile adpulse`). Account: **Free plan, $120 credits, 183 days left**.
+- 12.3: `aws sts get-caller-identity` → `user/adpulse-cli` (not root).
+- Q8: free-tier eligible in ap-south-1: c7i-flex.large, m7i-flex.large, t3.micro/small, t4g.micro/small, t8i.micro/small. Prices from the public AWS pricing data (the IAM user correctly lacks pricing:GetProducts): t3.small $0.0224/h, t8i.small $0.0269/h, **c7i-flex.large $0.0848/h**, m7i-flex.large $0.1008/h; gp3 $0.0912/GB-month. Measured stack (one env + monitoring + healer) ≈ 783 MiB. Jugal chose **c7i-flex.large**.
+- 12.4: AMI `ami-065d2b03fb493085a` (ubuntu-noble-24.04-amd64-server-20261004, Canonical 099720109477, x86_64).
+- 12.5: `~/.ssh/adpulse_aws` (ed25519, no passphrase, mode 600), approved by Jugal.
+- Q9: port 80 + 22 from **[redacted]/32** only (likely a campus-shared IP).
+- 12.7: `infra/terraform/aws` (provider aws 6.67.0). Q10 approved. The first apply stopped (SG description had an apostrophe; 6 free resources created). Fixed, re-planned (5 to add), **Q10 approved again**, applied.
+- Verified: SSH OK, Python 3.12.3, 2 vCPU, 3.7 GiB, 19 GB disk, **IMDSv1 → 401** (IMDSv2 only).
+- Next: Puppet `adpulse::host`, Chef `adpulse_db::host`, Ansible `aws_bootstrap.yml` + `aws_push_images.yml`, Terraform `envs/aws` (docker over SSH), deploy, verify, screenshots, **teardown**.
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.
