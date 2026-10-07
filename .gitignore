@@ -24,3 +24,4 @@ plan.md
 
 # Generated SBOMs (make sbom; CI uploads them as an artifact)
 sbom/
+*.tfplan

@@ -237,11 +237,14 @@ rca: ## Generate an RCA from an incident directory: ID=incidents/<dir>
 rca-summary: ## Rebuild docs/rca/SUMMARY.md from every incident timeline
 	/usr/bin/python3 tools/rca.py --summary
 
-aws-plan: ## Terraform plan for AWS
-	$(call todo,Phase 12)
+AWS_TF := terraform -chdir=infra/terraform/aws
 
-aws-up: ## Terraform apply for AWS (asks first)
-	$(call todo,Phase 12)
+aws-plan: ## Terraform plan for AWS (detects your public IP; saves aws.tfplan)
+	@ip=$$(curl -fsS --max-time 10 https://checkip.amazonaws.com); echo "my_ip=$$ip"; \
+	  $(AWS_TF) init -input=false >/dev/null && $(AWS_TF) plan -input=false -var my_ip=$$ip -out=aws.tfplan
+
+aws-up: ## Apply the SAVED aws.tfplan (review it first; plan rule R4)
+	$(AWS_TF) apply -input=false aws.tfplan
 
 aws-bootstrap: ## Ansible bootstrap of the AWS host
 	$(call todo,Phase 12)
