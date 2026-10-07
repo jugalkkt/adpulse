@@ -4,7 +4,8 @@
 - **Phase 0: DONE** (2026-10-07). DoD passed.
 - **Phase 1: DONE** (2026-10-07). DoD passed. Repo: https://github.com/jugalkkt/adpulse (private).
 - **Phase 2: DONE** (2026-10-07). DoD passed.
-- **Phase 3:** in progress (AdPulse API).
+- **Phase 3: DONE** (2026-10-07). DoD passed.
+- **Phase 4:** next (Postgres image with Chef/Cinc + backup agent).
 
 ## Phase 0: Preflight
 
@@ -94,6 +95,29 @@
   - Apply #1 changed 26 resources (created user/group/dirs, installed tzdata/python3/python3-venv, set the umask, and stripped setuid/setgid from 12 binaries).
   - Apply #2: "Applied catalog in 1.31 seconds" with no change notices, exit 0. The log is in the image at `/etc/adpulse/puppet-idempotency.log`.
 - In the image: 0 setuid/setgid files, `fs-hardening check` OK, no OpenVox packages or `/opt/puppetlabs`, 0 apt list files. Python 3.12.3.
+
+## Phase 3: AdPulse API
+
+### Built (2026-10-07)
+- `app/adpulse/`: config, logging_setup (JSON), metrics (all 10 from Section 9), db (psycopg pool, timeouts), cache (redis, no retries), selection (cache → db → fallback, weighted by bid_cpm, injectable RNG), chaos (5 modes, auto-expire), main (app factory, middleware, endpoints, impression queue), migrate (advisory lock, schema_migrations).
+- `app/migrations/`: 001_init, 002_seed (10 advertisers, 60 ads; every category has `all`-segment ads).
+- `app/loadgen/loadgen.py`.
+- `docker/api/Dockerfile`: `runtime` and `test` targets, FROM `adpulse-base:<sha>`.
+- `app/tests/compose.test.yml`.
+- Make targets: `build-api`, `lint-app`, `test`, `lock`.
+- Decisions D012–D017.
+
+### Phase 3 DoD (2026-10-07)
+- `make lint-app`: "All checks passed", 20 files already formatted.
+- `make test`: **33 passed** (30 unit + 3 integration on real postgres 18.6 / redis 8.10.2), green 6 runs in a row.
+  - Unit coverage: weighted selection (75%±2% share for 3:1 bids over 20k draws, determinism), cache hit/miss/error, fallback when both fail (and miss + DB fail), param validation (4 cases → 422), chaos expiry (fake clock), chaos 404 when disabled / 403 on bad token, memory_leak alloc + free, readyz/broken release, metrics, request-id, async impressions + queue-full drop.
+  - Integration coverage: migrations idempotent (60 ads, 10 advertisers), db → cache path, impressions written, all 30 category×segment combos served.
+  - Bug found and fixed: queued impressions were lost on shutdown (D015).
+- Images: `adpulse-api:0e1eb19`/`:dev` 266 MB; `adpulse-api-test` 340 MB.
+- Read-only run (`--read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges`, no DB/Redis):
+  - Docker health `healthy` after 6 s; `/healthz` 200; `/readyz` 503 with details.
+  - `/v1/ad` 200 `source=fallback` in 0.52 s; chaos route 404; runs as `adpulse`; rootfs write denied; JSON logs only.
+- Loadgen entrypoint: 10 requests per 2 s window at 5 rps.
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.

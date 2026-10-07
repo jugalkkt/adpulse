@@ -1,0 +1,49 @@
+# Test-only throwaway dependencies (runtime infrastructure is Terraform; see D012).
+# Used by `make test`. Credentials here are fixed, local-only test values.
+name: adpulse-test
+
+x-labels: &labels
+  com.adpulse.project: adpulse
+  com.adpulse.env: test
+
+services:
+  postgres:
+    image: postgres:18.6-trixie@sha256:fc973eb97c9fd04bfa1840e0f510719a584ccb3be8debfe6a4144637a9dfe8cf
+    labels: *labels
+    environment:
+      POSTGRES_DB: adpulse
+      POSTGRES_USER: adpulse
+      POSTGRES_PASSWORD: test-only-pg
+    tmpfs: [/var/lib/postgresql]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "adpulse", "-d", "adpulse"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  redis:
+    image: redis:8.10.2-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+    labels: *labels
+    command: ["redis-server", "--requirepass", "test-only-redis", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "test-only-redis", "--no-auth-warning", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  tests:
+    image: adpulse-api-test:${TAG:-dev}
+    labels: *labels
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    environment:
+      ADPULSE_INTEGRATION: "1"
+      APP_ENV: test
+      DB_HOST: postgres
+      DB_USER: adpulse
+      DB_PASSWORD: test-only-pg
+      REDIS_HOST: redis
+      REDIS_PASSWORD: test-only-redis
+    read_only: true
+    tmpfs: [/tmp]

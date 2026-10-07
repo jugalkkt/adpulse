@@ -78,3 +78,42 @@ Format: **Date / Decision / Why / Alternatives**
 - **Decision:** `.dockerignore` excludes everything (`*`), then re-includes only the directories builds need.
 - **Why:** This guarantees `.env`, Terraform state, `.git` and incident data can never be copied into an image, even by a careless `COPY . .`.
 - **Alternatives:** A deny-list (easy to forget a new secret file).
+
+### D012: Docker Compose only for test dependencies
+- **Date:** 2026-10-07
+- **Decision:** `app/tests/compose.test.yml` starts a throwaway Postgres (tmpfs) and Redis plus the test runner, for `make test` only. All runtime infrastructure is Terraform (Phase 5).
+- **Why:** The plan requires it (Phase 3). Compose is the simplest way to get disposable, healthy-gated dependencies, and it is torn down (`down -v`) after every run, even when tests fail.
+- **Alternatives:** Terraform for test deps (slow and stateful for a 3-second test run); testcontainers-python (needs the Docker socket inside the test container).
+
+### D013: Hash-locked Python dependencies; no pip in the runtime image
+- **Date:** 2026-10-07
+- **Decision:** Top-level pins live in `app/requirements*.in`. `make lock` runs pip-compile inside `adpulse-base` (the same Python 3.12 as the image) to produce `requirements*.txt` with every transitive package pinned and sha256-hashed. Images install with `--require-hashes --no-deps`, then uninstall pip.
+- **Why:** Exact, reproducible builds; a tampered package fails the hash check (supply chain, R5); fewer packages for Trivy to flag. The test image re-adds pip via `ensurepip`.
+- **Alternatives:** Plain `==` pins (transitive deps drift); uv or poetry (another tool to learn).
+
+### D014: Serving-path timeouts and four extra config variables
+- **Date:** 2026-10-07
+- **Decision:** On top of the plan's env vars, add `DB_TIMEOUT_SECONDS` (0.5), `REDIS_TIMEOUT_SECONDS` (0.2), `DB_POOL_MAX_SIZE` (5) and `IMPRESSION_QUEUE_SIZE` (1000). Every DB call is wrapped in `asyncio.wait_for`. Redis uses socket timeouts and **no retries** (redis-py 8 retries 3 times by default).
+- **Why:** With both dependencies down, `/v1/ad` must still answer (fallback) well inside nginx's 2 s upstream timeout. Measured: 0.52 s with both down. Retries would multiply the latency of a dead cache.
+- **Alternatives:** Library defaults (DB connects can hang for many seconds, which would turn a DB outage into 5xx at nginx instead of fallback ads).
+
+### D015: Impressions: skip house ads; drain the queue on shutdown
+- **Date:** 2026-10-07
+- **Decision:** Fallback (house) ads write no impression, since they aren't billable and the DB is usually the thing that's down. On shutdown, the app waits up to 2 s for the impression queue to drain before stopping the worker, and counts anything left as dropped.
+- **Why:** A flaky integration test (1 failure in 4 runs) exposed that queued impressions were lost on every shutdown, which means on every rolling deploy. After the fix: 6/6 green.
+- **Alternatives:** Persisting the queue (overkill for this demo).
+
+### D016: Chaos "hang" is a middleware gate, not a blocked event loop
+- **Date:** 2026-10-07
+- **Decision:** While `hang` is active, every request except `/admin/chaos*` waits in a 0.1 s polling loop. That includes `/healthz` and `/metrics`, so Docker health and Prometheus scrapes time out.
+- **Why:** This produces the symptom the plan's alert needs (`up{job="api"} == 0`), while `DELETE /admin/chaos` can still end it. Restarting the replica (what the healer does) also clears it, because chaos state is in memory. Blocking the whole event loop would make the chaos API itself unreachable.
+- **Alternatives:** `time.sleep` on the loop (unrecoverable without a restart).
+
+### D017: PostgreSQL 18.6 (Debian trixie) and Redis 8.10.2 (Alpine)
+- **Date:** 2026-10-07
+- **Decision:** `postgres:18.6-trixie` and `redis:8.10.2-alpine`, pinned by digest. On 2026-10-07 the Docker Hub `latest` tag for each pointed to exactly these versions.
+- **Why:** Current stable (R5). Postgres must be Debian-based so Cinc can run in Phase 4. Alpine Redis is small and only runs `redis-server`.
+- **Alternatives:** Postgres 17 (older); Debian Redis (bigger, no benefit).
+
+### Note: Starlette TestClient deprecation warning
+Starlette 1.7 warns that `httpx` with its TestClient is deprecated in favour of `httpx2`. Tests still pass. Revisit when FastAPI's TestClient switches over (tracked as a known item, not an error).
