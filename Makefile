@@ -276,8 +276,8 @@ AWS_SMOKE = ip=$$($(AWS_TF) output -raw public_ip); ssh-agent bash -c "ssh-add -
 aws-smoke: ## Smoke test aws-prod from the laptop
 	$(AWS_SMOKE)
 
-aws-down: ## Destroy everything on AWS (asks first)
-	$(call todo,Phase 12)
+aws-down: ## Destroy everything on AWS: stack, then VM/network; asks 'yes' for each, then verifies empty
+	bash scripts/aws_down.sh
 
 urls: ## Print local URLs
 	@echo "Grafana       http://127.0.0.1:3000"

@@ -380,6 +380,7 @@ Raw logs of the failed attempts are kept in `incidents/raw/` (gitignored).
   - (Tooling slip: a `pkill -f` pattern matched its own shell twice. Use `pgrep -f '[x]…'`.)
 - 🧑 Jugal deleted the `adpulse-cli` access key. Verified: `aws sts get-caller-identity --profile adpulse` → `InvalidClientTokenId`. Deleting the IAM user itself (optional) was not confirmed.
 - 🛑 Q11 answered. **AWS TORN DOWN at 2026-10-07T17:04:55Z.**
+- `make aws-down` implemented (`scripts/aws_down.sh`, D067); VERSIONS (aws provider, AMI, Cinc/Docker on the VM, runner) and SECURITY §9 filled in. **Phase 12 DoD met.**
 - Reminder for Jugal: check Billing → Credits on 2026-10-08. Expected usage ≈ 1.6 h × $0.0848 + disk + public IPv4, about $0.15.
 
 ## Open questions

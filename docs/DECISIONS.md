@@ -430,3 +430,8 @@ Starlette 1.7 warns that `httpx` with its TestClient is deprecated in favour of 
 - **Date:** 2026-10-07
 - **Decision:** The Grafana screenshot is from the local Grafana.
 - **Why:** Through the SSH tunnel (local port 13000), the browser could not load the Prometheus plugin, because Grafana's `appUrl` is `http://localhost:3000/`, making it a cross-origin request to the *local* Grafana. The fix (`GF_SERVER_ROOT_URL=http://localhost:13000/`) was not worth another apply for a screenshot. Prometheus on AWS was verified directly (9/9 targets up).
+
+### D067: `make aws-down` is a script that confirms each destroy and then verifies
+- **Date:** 2026-10-07
+- **Decision:** `scripts/aws_down.sh` destroys the stack first (it needs the VM's IP), then the VM and network. Each destroy runs as `plan -destroy -out` → you type `yes` → apply the saved plan. It finishes with the five plan 12.13 AWS CLI checks plus the key pair, and fails if anything is left.
+- **Why:** This is the same sequence that was run by hand on 2026-10-07, so the next teardown is one command and still obeys R4. A failed AWS call (for example, the deleted access key) aborts the script instead of counting as "0 left". This was tested: with the dead key the script exits with AuthFailure.

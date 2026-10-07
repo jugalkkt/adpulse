@@ -12,6 +12,7 @@ Every tool, image and library, pinned exactly (plan rule R5). Looked up at build
 | Docker Buildx plugin | 0.37.1 | download.docker.com apt repo, suite `noble` |
 | Terraform | 1.16.5 | apt.releases.hashicorp.com, suite `noble` |
 | AWS CLI | 2.37.10 | official zip, signature verified (key `FB5D…475C`) |
+| GitHub Actions runner | 2.338.0 | `~/actions-runner`, self-hosted, Phase 9 |
 | GitHub CLI (gh) | 2.102.0 | cli.github.com apt repo, suite `stable` |
 | shellcheck | 0.10.0 | Ubuntu 25.10 archive |
 | Ansible (package) | 14.5.0 (ansible-core 2.21.5) | pipx, Python 3.13.7 |
@@ -53,6 +54,19 @@ _More are added from Phase 2 onwards._
 |---|---|
 | Terraform CLI | 1.16.5 |
 | kreuzwerker/docker provider | 4.6.0 (latest on 2026-10-07; lock files committed) |
+| hashicorp/aws provider | 6.67.0 (Phase 12; lock file committed) |
+
+## AWS (Phase 12, deployed and torn down 2026-10-07)
+
+| Item | Value |
+|---|---|
+| Region / AZ | ap-south-1 / ap-south-1a (Q7) |
+| Instance type | c7i-flex.large, 2 vCPU / 4 GiB, $0.0848/h on-demand (Q8) |
+| AMI | `ami-065d2b03fb493085a` = ubuntu-noble-24.04-amd64-server-20261004 (Canonical `099720109477`), found by a data source filter, never hard-coded |
+| Root volume | gp3 20 GB, encrypted |
+| Cinc Client on the VM | 19.3.14 Ubuntu 24.04 .deb, sha256 `c710cc8b…6f9aebf` (`ansible/playbooks/aws_bootstrap.yml`) |
+| OpenVox on the VM | 8.29.0 (same `openvox8` repo as the images) |
+| Docker on the VM | docker-ce 5:29.8.2-1~ubuntu.24.04~noble (same as the laptop; Docker apt repo, key fingerprint checked) |
 
 ## Config-management tools (inside containers only)
 
