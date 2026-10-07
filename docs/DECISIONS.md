@@ -316,3 +316,47 @@ Starlette 1.7 warns that `httpx` with its TestClient is deprecated in favour of 
 - **Date:** 2026-10-07
 - **Decision:** `scripts/test_heal_playbooks.sh` runs all 8 playbooks (11 checks) inside the running healer against staging, under an Alertmanager silence so the live healer doesn't act at the same time.
 - **Why:** Two live-test attempts failed on bugs that a direct test finds in minutes, so each playbook is now proven before relying on the alert chain.
+
+### D049: `keep_firing_for: 30s` on outage alerts
+- **Date:** 2026-10-07
+- **Decision:** AdPulseDatabaseDown, AdPulseCacheDown and both AdPulseApiReplicaDown rules keep firing for 30 s after their expression goes empty.
+- **Why:** Real incident (RCA 2026-10-07-1100-db-down-staging): during the outage, exporter scrapes sometimes hit the 4 s timeout. The missing `pg_up` sample reset the alert to pending, so it never stayed firing for Alertmanager's 10 s `group_wait`. The healer was never notified, and staging served 94.2% house ads for 10 minutes. A promtool test with scrape gaps now guards this.
+- **Alternatives:** `or up{job="postgres"} == 0` (would restart the DB when only the exporter dies).
+
+### D050: Exporters and Toxiproxy use a dead upstream DNS (`dns = ["127.0.0.1"]`)
+- **Date:** 2026-10-07
+- **Decision:** These containers only ever resolve Docker names, so their upstream resolver is set to nothing. For a *stopped* container's name, Docker's embedded DNS then answers "no such host" immediately.
+- **Why:** Measured on this network: resolving a stopped container's name took ~5.2 s (Docker forwards unknown names upstream). Exporter scrapes with the DB down took 3.7–9.0 s (Postgres) and 2.2–4.5 s (Redis). After the change: 1.2–2.0 s and 0.2–0.4 s. Setting `connect_timeout=1` alone did not help, because it does not bound the DNS phase.
+- **Alternatives:** Static IPs for DB containers (more config to keep in sync).
+
+### D051: Two network-latency scenarios
+- **Date:** 2026-10-07
+- **Decision:** `net-latency` (the plan's: +300 ms on Redis) and `net-latency-datapath` (+300 ms on Redis and Postgres). Jugal chose this after a pre-experiment measurement.
+- **Why:** A 20 s measurement showed that the plan's version cannot trip the p95 alert: the 200 ms Redis timeout caps requests at ~205 ms. The run confirmed it: p95 peak 0.247 s, 4,842 cache errors, no alert. That is a valid finding (a detection gap). The second variant exercises the latency alert → `diagnose_latency` → human path.
+
+### D052: Chaos `memory_leak` can plateau (`max_mb`)
+- **Date:** 2026-10-07
+- **Decision:** New query parameter `max_mb`. The mem-leak scenario uses 10 MB/s up to 190 MB (~94% of 256 MiB).
+- **Why:** An uncapped leak OOM-kills the container in ~20 s. Docker's restart policy then "heals" it before ApiContainerMemoryHigh's 30 s window, so the healer is never exercised and in-flight requests fail.
+
+### D053: Chaos tool design
+- **Date:** 2026-10-07
+- **Decision:**
+  - The tool waits for "quiet" (no active alerts) before each run and records a 5 s baseline.
+  - It probes `/v1/ad` through nginx every 1 s. A *good* probe is 200, a non-fallback ad, and under 250 ms.
+  - "recovered" = scenario-specific health check + 3 consecutive good probes. Replica health means `/healthz` really answers, because Docker's health status lags.
+  - It verifies the injection actually happened (cpu-hog).
+  - Cleanup in `finally`, and `stop` cleans every fault type.
+  - Heal events are read from the heal log after recovery, since the healer logs only when its playbook finishes.
+  - Prod requires `--confirm-prod`.
+- **Why:** Each rule fixes a real failure seen while running the experiments: a premature "recovered" in api-hang, a no-op cpu-hog (read-only rootfs), and missing heal events.
+
+### D054: RCA evidence is persisted, with an exact window
+- **Date:** 2026-10-07
+- **Decision:** `tools/rca.py` writes `incidents/<id>/evidence.json` (PromQL plus values over exactly injection → alert resolved). `SUMMARY.md` is built only from `timeline.json`, `evidence.json` and optional `note.txt`.
+- **Why:** With ±60 s padding, back-to-back runs counted each other's errors (the cache-down report first showed 25 fallback ads that belonged to the next db-down run). Persisting evidence keeps the summary reproducible after Prometheus data is gone.
+
+### D055: Raw evidence files are never rewritten by pre-commit
+- **Date:** 2026-10-07
+- **Decision:** `end-of-file-fixer` and `trailing-whitespace` exclude `^incidents/`.
+- **Why:** The hooks "fixed" psql output in a diagnostics file; evidence must stay byte-for-byte as captured. gitleaks still scans it.

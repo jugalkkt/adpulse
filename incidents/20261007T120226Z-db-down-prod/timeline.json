@@ -1,0 +1,85 @@
+{
+  "id": "20261007T120226Z-db-down-prod",
+  "scenario": "db-down",
+  "layer": "database",
+  "env": "prod",
+  "description": "docker stop postgres-<env>",
+  "expected_alert": "AdPulseDatabaseDown",
+  "expected_heal": "restart_db",
+  "human_stop": false,
+  "events": [
+    {
+      "event": "injected",
+      "ts": "2026-10-07T12:02:32.089Z",
+      "t_plus_s": 0.0
+    },
+    {
+      "event": "alert_firing",
+      "ts": "2026-10-07T12:02:54.175Z",
+      "t_plus_s": 22.1
+    },
+    {
+      "event": "heal_started",
+      "ts": "2026-10-07T12:03:03.234Z",
+      "t_plus_s": 31.1
+    },
+    {
+      "event": "first_failed_probe",
+      "ts": "2026-10-07T12:03:05.873Z",
+      "t_plus_s": 33.8
+    },
+    {
+      "event": "recovered",
+      "ts": "2026-10-07T12:03:12.495Z",
+      "t_plus_s": 40.4
+    },
+    {
+      "event": "injection_removed",
+      "ts": "2026-10-07T12:03:12.513Z",
+      "t_plus_s": 40.4
+    },
+    {
+      "event": "alert_resolved",
+      "ts": "2026-10-07T12:03:15.514Z",
+      "t_plus_s": 43.4
+    },
+    {
+      "event": "heal_finished",
+      "ts": "2026-10-07T12:03:17.024Z",
+      "t_plus_s": 44.9
+    }
+  ],
+  "other_alerts": [],
+  "mttd_s": 22.1,
+  "mttr_s": 40.4,
+  "heal": [
+    {
+      "ts": "2026-10-07T12:03:17.024+00:00",
+      "alertname": "AdPulseDatabaseDown",
+      "env": "prod",
+      "fingerprint": "3b76432aa4e7cd12",
+      "action": "restart_db",
+      "trigger": "firing",
+      "attempt": 1,
+      "result": "success",
+      "duration_s": 13.79,
+      "extra_vars": {
+        "env": "prod",
+        "alertname": "AdPulseDatabaseDown"
+      },
+      "stdout_tail": "ft).\nFAILED - RETRYING: [localhost]: Wait for healthy | postgres-prod (28 retries left).\nok: [localhost]\n\nTASK [Wait for pg_isready] *****************************************************\nok: [localhost]\n\nTASK [Find a running API replica] **********************************************\nok: [localhost]\n\nTASK [Wait until the API reports ready (/readyz 200)] **************************\nok: [localhost]\n\nPLAY RECAP *********************************************************************\nlocalhost                  : ok=7    changed=1    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   \n\n"
+    }
+  ],
+  "probes": {
+    "interval_s": 1,
+    "total": 43,
+    "failed_non_200": 0,
+    "fallback": 4,
+    "slow_over_250ms": 4,
+    "max_latency_s": 0.507
+  },
+  "window": {
+    "start": "2026-10-07T12:02:32.089Z",
+    "end": "2026-10-07T12:03:15.514Z"
+  }
+}

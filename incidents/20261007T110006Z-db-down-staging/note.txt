@@ -1,0 +1,1 @@
+First run. The alert flapped (slow DNS → scrape timeouts) and never reached the healer. Ended by the tool's 600 s safety limit. Fixed: keep_firing_for + fast-fail exporter DNS.

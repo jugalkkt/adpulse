@@ -1,0 +1,1 @@
+Plan's version (Redis only). Contained by the 200 ms Redis timeout: p95 peaked at 0.247 s, 4,842 cache errors. Detection gap.

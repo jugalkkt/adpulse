@@ -1,0 +1,22 @@
+{
+  "window": {
+    "start": 1791374552.089,
+    "end": 1791374595.514
+  },
+  "queries": {
+    "peak_5xx_ratio": "env:adpulse_http_5xx:ratio_rate1m{env=\"prod\"}",
+    "peak_p95_s": "env:adpulse_http_request_duration_seconds:p95_1m{env=\"prod\"}",
+    "requests": "sum(increase(adpulse_http_requests_total{env=\"prod\", route=\"/v1/ad\"}[43s])) or vector(0)",
+    "requests_5xx": "sum(increase(adpulse_http_requests_total{env=\"prod\", route=\"/v1/ad\", status=~\"5..\"}[43s])) or vector(0)",
+    "fallback_ads": "sum(increase(adpulse_fallback_total{env=\"prod\"}[43s])) or vector(0)",
+    "cache_errors": "sum(increase(adpulse_cache_requests_total{env=\"prod\", result=\"error\"}[43s])) or vector(0)"
+  },
+  "values": {
+    "peak_5xx_ratio": 0.0,
+    "peak_p95_s": 0.8607707509881424,
+    "requests": 1115.85,
+    "requests_5xx": 0.0,
+    "fallback_ads": 272.68924999999996,
+    "cache_errors": 1.075
+  }
+}

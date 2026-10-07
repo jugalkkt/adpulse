@@ -1,0 +1,22 @@
+{
+  "window": {
+    "start": 1791370811.438,
+    "end": 1791371415.03
+  },
+  "queries": {
+    "peak_5xx_ratio": "env:adpulse_http_5xx:ratio_rate1m{env=\"staging\"}",
+    "peak_p95_s": "env:adpulse_http_request_duration_seconds:p95_1m{env=\"staging\"}",
+    "requests": "sum(increase(adpulse_http_requests_total{env=\"staging\", route=\"/v1/ad\"}[603s])) or vector(0)",
+    "requests_5xx": "sum(increase(adpulse_http_requests_total{env=\"staging\", route=\"/v1/ad\", status=~\"5..\"}[603s])) or vector(0)",
+    "fallback_ads": "sum(increase(adpulse_fallback_total{env=\"staging\"}[603s])) or vector(0)",
+    "cache_errors": "sum(increase(adpulse_cache_requests_total{env=\"staging\", result=\"error\"}[603s])) or vector(0)"
+  },
+  "values": {
+    "peak_5xx_ratio": 0.0,
+    "peak_p95_s": 0.9750000000000001,
+    "requests": 9636.607184873948,
+    "requests_5xx": 0.0,
+    "fallback_ads": 9077.538532058825,
+    "cache_errors": 0.0
+  }
+}
