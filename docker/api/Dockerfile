@@ -6,7 +6,7 @@ FROM ${BASE_IMAGE} AS runtime
 
 ARG GIT_SHA=dev
 # Phase 10 rollback demo bakes BROKEN_RELEASE=true into a deliberately bad image.
-ARG BROKEN_RELEASE=false
+ARG BROKEN_RELEASE=true
 
 LABEL com.adpulse.project="adpulse" \
       com.adpulse.role="api" \
