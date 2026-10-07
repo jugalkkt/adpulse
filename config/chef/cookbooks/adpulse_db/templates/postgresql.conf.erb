@@ -1,0 +1,18 @@
+# Managed by Chef (Cinc), cookbook adpulse_db. Do not edit by hand.
+listen_addresses = '*'
+port = 5432
+max_connections = <%= @attrs['max_connections'] %>
+shared_buffers = <%= @attrs['shared_buffers'] %>
+password_encryption = '<%= @attrs['password_encryption'] %>'
+statement_timeout = '<%= @attrs['statement_timeout'] %>'
+
+# Logging: slow queries and connection churn, to stderr (docker logs)
+log_destination = 'stderr'
+logging_collector = off
+log_min_duration_statement = '<%= @attrs['log_min_duration_statement'] %>'
+log_connections = 'authentication'
+log_disconnections = on
+log_line_prefix = '%m [%p] %q%u@%d '
+
+# Better I/O timing stats for postgres_exporter and slow-query analysis
+track_io_timing = on

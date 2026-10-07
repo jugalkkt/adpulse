@@ -1,0 +1,23 @@
+#!/bin/bash
+# Managed by Chef (Cinc), cookbook adpulse_db.
+# backup-agent entrypoint: a backup every BACKUP_INTERVAL_SECONDS, and a
+# metrics refresh (directory size) every <%= @attrs['metrics_refresh_seconds'] %>s in between.
+set -uo pipefail
+
+INTERVAL="${BACKUP_INTERVAL_SECONDS:-<%= @attrs['backup_interval_seconds'] %>}"
+REFRESH=<%= @attrs['metrics_refresh_seconds'] %>
+next_backup=0
+
+trap 'echo "{\"event\":\"stopping\"}"; exit 0' TERM INT
+echo "{\"event\":\"started\",\"env\":\"${ADPULSE_ENV:-?}\",\"interval_s\":$INTERVAL}"
+
+while true; do
+  now="$(date +%s)"
+  if ((now >= next_backup)); then
+    /usr/local/bin/adpulse-backup.sh || echo "{\"event\":\"backup_failed\",\"env\":\"${ADPULSE_ENV:-?}\"}"
+    next_backup=$((now + INTERVAL))
+  fi
+  /usr/local/bin/adpulse-backup-metrics.sh || echo "{\"event\":\"metrics_failed\"}"
+  sleep "$REFRESH" &
+  wait $!
+done

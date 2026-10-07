@@ -13,7 +13,7 @@ define todo
 	@echo "make $@: not implemented yet ($(1))" >&2; exit 1
 endef
 
-.PHONY: help check secrets build build-base build-api lock lint lint-puppet lint-app tools-puppet test scan infra monitoring deploy rollback status \
+.PHONY: help check secrets build build-base build-api build-postgres lock lint lint-puppet lint-chef lint-app tools-puppet test test-postgres scan infra monitoring deploy rollback status \
         up down chaos chaos-stop rca aws-plan aws-up aws-bootstrap aws-deploy aws-down urls
 
 help: ## List targets
@@ -25,7 +25,7 @@ check: ## Print the machine report (OS, tools, ports)
 secrets: ## Create .env from .env.example (never overwrites values)
 	@bash scripts/gen_secrets.sh
 
-build: build-base build-api ## Build all images tagged with the git SHA and dev
+build: build-base build-api build-postgres ## Build all images tagged with the git SHA and dev
 
 build-base: ## Build adpulse-base (Ubuntu + Puppet/OpenVox hardening)
 	docker build --progress=plain --build-arg GIT_SHA=$(TAG) \
@@ -37,13 +37,24 @@ build-api: build-base ## Build adpulse-api (FROM adpulse-base:<sha>) and its tes
 	docker build -q --build-arg BASE_IMAGE=adpulse-base:$(TAG) --build-arg GIT_SHA=$(TAG) \
 	  -f docker/api/Dockerfile --target test -t adpulse-api-test:$(TAG) -t adpulse-api-test:dev .
 
+build-postgres: ## Build adpulse-postgres (Postgres + Chef/Cinc config + backup scripts)
+	docker build --progress=plain --build-arg GIT_SHA=$(TAG) \
+	  -f docker/postgres/Dockerfile -t adpulse-postgres:$(TAG) -t adpulse-postgres:dev .
+
 lock: ## Re-lock Python dependencies with hashes (app/requirements*.in -> .txt)
 	docker run --rm --user "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR)/app:/w" -w /w adpulse-base:dev bash -euo pipefail -c '\
 	  python3 -m venv /tmp/v && /tmp/v/bin/pip install -q pip-tools==7.6.2 && \
 	  for f in requirements requirements-dev; do \
 	    /tmp/v/bin/pip-compile -q --generate-hashes --allow-unsafe --strip-extras --no-header -o $$f.txt $$f.in; done'
 
-lint: lint-puppet lint-app ## Run all linters
+lint: lint-puppet lint-chef lint-app ## Run all linters
+
+CINC_WORKSTATION := cincproject/workstation:26.3.0@sha256:b19f9949b1012e5a9cd93b68ee1d00b705fc66e1d47f4283471cddf293500830
+
+lint-chef: ## cookstyle on the Chef cookbook (Cinc Workstation container)
+	docker run --rm --network none -e HOME=/tmp --user "$$(id -u):$$(id -g)" \
+	  -v "$(CURDIR)/config/chef:/work:ro" -w /work $(CINC_WORKSTATION) \
+	  cookstyle --no-color --cache-root /tmp cookbooks && echo "cookstyle: clean"
 
 lint-app: ## ruff check + format check (inside the test image)
 	docker run --rm --network none --read-only --tmpfs /tmp adpulse-api-test:$(TAG) \
@@ -58,6 +69,9 @@ lint-puppet: tools-puppet ## puppet parser/epp validate + puppet-lint
 	  puppet epp validate modules/adpulse/templates/*.epp && \
 	  puppet-lint --fail-on-warnings --relative manifests modules && \
 	  echo "puppet lint: clean"'
+
+test-postgres: ## Behavioural checks of the adpulse-postgres image (settings, auth, backups)
+	bash scripts/test_postgres_image.sh adpulse-postgres:$(TAG)
 
 test: ## Unit + integration tests (throwaway Postgres/Redis via compose)
 	TAG=$(TAG) docker compose -f app/tests/compose.test.yml up -d --wait postgres redis

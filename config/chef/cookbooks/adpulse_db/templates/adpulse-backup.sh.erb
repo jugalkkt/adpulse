@@ -1,0 +1,33 @@
+#!/bin/bash
+# Managed by Chef (Cinc), cookbook adpulse_db.
+# One backup: pg_dump -Fc -> <backup_dir>/<env>-<UTC timestamp>.dump, then
+# enforce retention and refresh metrics. Connection settings come from the
+# standard libpq env vars (PGHOST, PGUSER, PGPASSWORD, PGDATABASE).
+set -euo pipefail
+
+ENV_NAME="${ADPULSE_ENV:?ADPULSE_ENV must be set}"
+DIR="<%= @attrs['backup_dir'] %>"
+RETENTION="${BACKUP_RETENTION_COUNT:-<%= @attrs['backup_retention_count'] %>}"
+STATE="$DIR/.state-$ENV_NAME"
+
+ts="$(date -u +%Y%m%dT%H%M%SZ)"
+out="$DIR/$ENV_NAME-$ts.dump"
+start="$(date +%s.%N)"
+
+pg_dump -Fc --no-password -f "$out.partial"
+mv "$out.partial" "$out"
+
+end="$(date +%s.%N)"
+duration="$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.3f", e - s }')"
+
+# Retention: keep the newest N real backups of this environment.
+mapfile -t old < <(ls -1t "$DIR/$ENV_NAME"-*.dump 2>/dev/null | tail -n +"$((RETENTION + 1))")
+if ((${#old[@]})); then
+  rm -f -- "${old[@]}"
+fi
+
+printf 'last_success=%s\nlast_duration=%s\n' "${end%.*}" "$duration" > "$STATE.tmp"
+mv "$STATE.tmp" "$STATE"
+echo "{\"event\":\"backup_ok\",\"env\":\"$ENV_NAME\",\"file\":\"$(basename "$out")\",\"duration_s\":$duration,\"removed\":${#old[@]}}"
+
+/usr/local/bin/adpulse-backup-metrics.sh

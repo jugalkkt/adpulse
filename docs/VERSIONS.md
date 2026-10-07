@@ -31,6 +31,8 @@ Host facts: x86_64, 8 CPUs, 15 GiB RAM, cgroup v2, Docker storage driver `overla
 | ubuntu | 24.04 | `sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55` | base image, puppet tools image |
 | postgres | 18.6-trixie | `sha256:fc973eb97c9fd04bfa1840e0f510719a584ccb3be8debfe6a4144637a9dfe8cf` | test DB (Phase 3); base of the adpulse-postgres image (Phase 4) |
 | redis | 8.10.2-alpine | `sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0` | test cache; runtime cache |
+| prom/prometheus | v3.15.0 | `sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e` | promtool checks (Phase 4+), Prometheus (Phase 7) |
+| cincproject/workstation | 26.3.0 | `sha256:b19f9949b1012e5a9cd93b68ee1d00b705fc66e1d47f4283471cddf293500830` | cookstyle lint |
 | zricethezav/gitleaks | v8.30.0 | `sha256:691af3c7c5a48b16f187ce3446d5f194838f91238f27270ed36eef6359a574d9` | pre-commit secret scan |
 
 _More are added from Phase 2 onwards._
@@ -41,6 +43,8 @@ _More are added from Phase 2 onwards._
 |---|---|---|
 | OpenVox agent (Puppet) | 8.29.0-1+ubuntu24.04 (repo `openvox8`) | `docker/base/Dockerfile` (purged after apply), `docker/tools/puppet.Dockerfile` |
 | puppet-lint | 5.1.1 (rubygems) | `docker/tools/puppet.Dockerfile` |
+| Cinc Client (Chef) | 19.3.14 (Debian 13 .deb, sha256 `a6094f97…aeefebd`) | `docker/postgres/Dockerfile` (purged after converge) |
+| cookstyle | from Cinc Workstation 26.3.0 | `make lint-chef` |
 
 ## Pre-commit hooks (`.pre-commit-config.yaml`, pinned via `pre-commit autoupdate` on 2026-10-07)
 

@@ -117,3 +117,26 @@ Format: **Date / Decision / Why / Alternatives**
 
 ### Note: Starlette TestClient deprecation warning
 Starlette 1.7 warns that `httpx` with its TestClient is deprecated in favour of `httpx2`. Tests still pass. Revisit when FastAPI's TestClient switches over (tracked as a known item, not an error).
+
+### D018: pg_hba allows the three environment subnets, from a Chef attribute
+- **Date:** 2026-10-07
+- **Decision:** Attribute `node['adpulse_db']['allowed_cidrs']` = `172.28.10.0/24` (staging), `172.28.20.0/24` (prod), `172.28.30.0/24` (aws-prod). pg_hba gets one `host … scram-sha-256` line per CIDR. Chef runs at image build time, so a single image serves every environment.
+- **Why:** Cinc is removed from the image (plan Phase 4), so per-container CIDRs can't be rendered at runtime. Building one image per environment would break "build once, promote everywhere". Each Postgres container is attached only to its own environment's Docker network, so in practice a container only ever sees clients from its own subnet. A client from any other subnet is rejected (tested: "no pg_hba.conf entry"). The Terraform subnets (Phase 5) must match this attribute; Phase 5 adds a validation for that.
+- **Alternatives:** Per-env image builds with a build-arg CIDR (3 images per release); the `samenet` keyword (dynamic, but not a "CIDR passed as an attribute" as the plan asks).
+
+### D019: Install Cinc from a hash-pinned .deb (via the omnitruck metadata API)
+- **Date:** 2026-10-07
+- **Decision:** The Dockerfile downloads `cinc_19.3.14-1_amd64.deb` (Debian 13) from packages.cinc.sh and checks the sha256 `a6094f97…aeefebd` that `omnitruck.cinc.sh/stable/cinc/metadata` reported on 2026-10-07. It runs `cinc-client --local-mode --chef-license accept-no-persist` twice (the second run must report `0/N resources updated`), then `dpkg --purge cinc`. `accept-no-persist` was passed defensively; Cinc did not prompt for a license.
+- **Why:** Same artifact as omnitruck (plan option 1), but pinned and hash-verified instead of piping a script into a shell, so builds are reproducible.
+- **Alternatives:** The `install.sh` script (unpinned); `COPY --from=cincproject/cinc` (an extra 58 MB image to trust).
+- **Note:** The harmless log line `ERROR: shard_seed: Failed to get dmi property serial_number` appears because containers have no DMI data.
+
+### D020: Three database roles; peer for local postgres, no trust anywhere
+- **Date:** 2026-10-07
+- **Decision:**
+  - `postgres`: superuser, from `POSTGRES_PASSWORD`; init only, plus `docker exec` diagnostics.
+  - `adpulse`: app and migrations; owns database `adpulse`; also used by pg_dump.
+  - `adpulse_monitor`: `pg_monitor`, connection limit 3; used by postgres_exporter.
+  - pg_hba: `local all postgres peer`, `local all all scram-sha-256`, then only the env CIDRs with scram-sha-256.
+- **Why:** Least privilege: the app and the exporter never hold superuser. The plan allowed a local `trust` entry for the postgres user if init needed it. Init doesn't (the entrypoint exports `PGPASSWORD`), so the stricter `peer` is used for the healer's `docker exec psql`.
+- **Alternatives:** Everything as the superuser (simpler, much riskier).
