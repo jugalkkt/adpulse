@@ -29,6 +29,8 @@ Host facts: x86_64, 8 CPUs, 15 GiB RAM, cgroup v2, Docker storage driver `overla
 | Image | Tag | Digest | Used for |
 |---|---|---|---|
 | ubuntu | 24.04 | `sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55` | base image, puppet tools image |
+| postgres | 18.6-trixie | `sha256:fc973eb97c9fd04bfa1840e0f510719a584ccb3be8debfe6a4144637a9dfe8cf` | test DB (Phase 3); base of the adpulse-postgres image (Phase 4) |
+| redis | 8.10.2-alpine | `sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0` | test cache; runtime cache |
 | zricethezav/gitleaks | v8.30.0 | `sha256:691af3c7c5a48b16f187ce3446d5f194838f91238f27270ed36eef6359a574d9` | pre-commit secret scan |
 
 _More are added from Phase 2 onwards._
@@ -46,4 +48,18 @@ pre-commit-hooks v6.0.0, ruff-pre-commit v0.16.10, pre-commit-terraform v1.109.2
 
 ## Python libraries
 
-_Filled in in Phase 3 (`app/requirements.txt`)._
+Python 3.12.3 (from Ubuntu 24.04 in adpulse-base). Full lock with hashes: `app/requirements.txt`, `app/requirements-dev.txt` (pip-tools 7.6.2).
+
+| Package | Version | Role |
+|---|---|---|
+| fastapi | 0.142.2 | web framework |
+| starlette | 1.7.0 | (via fastapi) |
+| uvicorn | 0.54.0 | ASGI server |
+| psycopg[binary] | 3.3.6 | PostgreSQL driver |
+| psycopg-pool | 3.3.3 | async connection pool |
+| redis | 8.1.0 | Redis client (asyncio) |
+| prometheus-client | 0.26.0 | metrics |
+| pydantic / pydantic-settings | 2.13.5 / 2.15.0 | validation, env config |
+| httpx | 0.28.1 | loadgen HTTP client, TestClient |
+| pytest / pytest-asyncio | 9.1.1 / 1.4.0 | tests (dev) |
+| ruff | 0.16.10 | lint + format (dev) |
