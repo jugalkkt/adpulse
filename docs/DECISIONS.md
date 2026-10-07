@@ -140,3 +140,57 @@ Starlette 1.7 warns that `httpx` with its TestClient is deprecated in favour of 
   - pg_hba: `local all postgres peer`, `local all all scram-sha-256`, then only the env CIDRs with scram-sha-256.
 - **Why:** Least privilege: the app and the exporter never hold superuser. The plan allowed a local `trust` entry for the postgres user if init needed it. Init doesn't (the entrypoint exports `PGPASSWORD`), so the stricter `peer` is used for the healer's `docker exec psql`.
 - **Alternatives:** Everything as the superuser (simpler, much riskier).
+
+### D021: Apply order for monitoring and env stacks
+- **Date:** 2026-10-07
+- **Decision:** `make up` runs `monitoring → infra staging → infra prod → monitoring`. `scripts/terraform.sh monitoring` passes `env_networks` = the `adpulse-staging` / `adpulse-prod` networks that exist at that moment.
+- **Why:** The plan has monitoring create the shared `adpulse-textfile` volume (which the env stacks need) and also attach Prometheus to the env networks (which the env stacks create). The two-pass apply resolves that cycle with no manual step. Once every network exists, the second pass is a no-op.
+- **Alternatives:** Creating the volume outside Terraform; a third Terraform root just for shared resources.
+
+### D022: `adpulse-textfile` is a tmpfs volume owned by uid 999
+- **Date:** 2026-10-07
+- **Decision:** A local-driver volume with `type=tmpfs,o=size=8m,uid=999,gid=999,mode=0755`.
+- **Why:** Every env's backup-agent (uid 999) writes its `.prom` file there, and node-exporter reads it. A normal named volume takes its ownership from whichever container mounts it first, which could leave it root-owned and unwritable. The files are rewritten every 15 s, so persistence is not needed.
+- **Alternatives:** One volume per env (node-exporter reads a single textfile directory); running backup-agent as root.
+
+### D023: node-exporter on the monitoring network, not host networking
+- **Date:** 2026-10-07
+- **Decision:** `pid_mode=host` and the host `/` mounted read-only at `/host` (`--path.rootfs`), but attached to `adpulse-monitoring`.
+- **Why:** With host networking, port 9100 would listen on every host interface (including Wi-Fi). Plan pitfall #6 explicitly allows this alternative. Trade-off: `node_network_*` metrics describe the container's interface, not the host's. CPU, memory, disk and load are the host's (MemTotal matched `/proc/meminfo` exactly).
+- **Alternatives:** Host networking with Prometheus scraping via host-gateway.
+
+### D024: cAdvisor without `privileged`
+- **Date:** 2026-10-07
+- **Decision:** Read-only bind mounts of `/`, `/var/run`, `/sys`, `/var/lib/docker` and `/dev/disk`, plus device `/dev/kmsg` (read), `cap_drop ALL` and `no-new-privileges`. Heavy metric groups are disabled; only the `com.adpulse.*` container labels are exported.
+- **Why:** On this host (cgroup v2, Docker 29.8.2) that was enough. cAdvisor reported all containers with their labels and stayed healthy, so `privileged` (as some docs suggest) wasn't needed.
+- **Alternatives:** `privileged: true` (much broader access).
+
+### D025: Getting config into read-only containers
+- **Date:** 2026-10-07
+- **Decision:**
+  - nginx and Redis receive their config (Redis: just the password) in an env var. A `/bin/sh -c` start command writes it to tmpfs `/tmp`, then `exec`s the server.
+  - Toxiproxy (a no-shell image) gets its JSON via Terraform `upload` and is the **one container with a writable rootfs**. It runs as `nobody` with no capabilities, and the image contains only two static binaries.
+- **Why:** The docker provider's `upload` copies via the container root `/`, which Docker refuses for read-only containers. That was tested: it failed even when the target path was a volume. Env + tmpfs works the same locally and over docker-over-SSH (Phase 12), where host bind-mount paths would not exist.
+- **Alternatives:** Bind-mounting rendered files from the host (breaks on AWS); a writable rootfs for all three.
+
+### D026: Fixing Terraform perpetual diffs without `ignore_changes`
+- **Date:** 2026-10-07
+- **Decision:** Declare the values Docker fills in on its own:
+  - network `gateway = cidrhost(subnet, 1)` (it otherwise forced replacement on every plan);
+  - `memory_swap = memory` (Docker defaulted it to 2× memory; this also means no container can swap past its limit);
+  - `label=disable` on node-exporter (Docker adds it with `pid_mode=host`);
+  - healthcheck timing fields that the image defines (loadgen's disabled check, cAdvisor's `start_period`).
+- **Why:** A second `terraform plan` now shows "No changes" in staging, prod and monitoring, and real drift is still detected because nothing is ignored.
+- **Alternatives:** `lifecycle { ignore_changes = [...] }`, which hides genuine drift.
+
+### D027: Postgres and Redis run directly as their own uid
+- **Date:** 2026-10-07
+- **Decision:** `user = "999:999"` for Postgres and backup-agent, `999:1000` for Redis. Their entrypoints then skip the root-only `chown`/`gosu` steps.
+- **Why:** With no root step, they need zero capabilities (`cap_drop ALL`, nothing added). Volume ownership comes from the images' directories on first mount.
+- **Alternatives:** Root entrypoint plus CHOWN/SETUID/SETGID/DAC_OVERRIDE capabilities.
+
+### D028: nginx hides `/metrics` and `/admin/*`
+- **Date:** 2026-10-07
+- **Decision:** nginx returns 404 for `/metrics` and `/admin/` in every env. Prometheus scrapes replicas directly on the env network, and chaos tooling calls replicas directly (`docker exec`).
+- **Why:** The only published entry point should expose the product API, nothing internal, especially on AWS.
+- **Alternatives:** Protect them with auth at nginx.

@@ -6,7 +6,8 @@
 - **Phase 2: DONE** (2026-10-07). DoD passed.
 - **Phase 3: DONE** (2026-10-07). DoD passed.
 - **Phase 4: DONE** (2026-10-07). DoD passed.
-- **Phase 5:** next (local infrastructure with Terraform).
+- **Phase 5: DONE** (2026-10-07). DoD passed. Local staging, prod and monitoring stacks are **running**.
+- **Phase 6:** next (Ansible releases, rollback, zero-downtime).
 
 ## Phase 0: Preflight
 
@@ -140,6 +141,36 @@
   - Correct password connects; monitor role reads pg_stat_activity; **wrong password rejected** ("password authentication failed"); a non-allowed subnet is rejected ("no pg_hba.conf entry"); no trust lines.
   - Backup loop: `pgtest-20261007T071516Z.dump` (pg_restore --list OK, 0.099 s). The `.prom` file passes `promtool check metrics` (Prometheus v3.15.0) and has all 5 metrics.
   - No leftover test containers, networks or volumes.
+
+## Phase 5: Local infrastructure with Terraform
+
+### Built (2026-10-07)
+- `infra/terraform/modules/adpulse_stack`: network with a fixed subnet and explicit gateway; volumes pgdata/redisdata/backups; containers postgres, redis, toxiproxy, nginx, backup-agent, postgres-exporter, redis-exporter, loadgen.
+  - Every container has limits (Section 5.4), labels, no-new-privileges, cap_drop ALL (no cap_add anywhere) and a read-only rootfs (toxiproxy excepted, D025).
+- `modules/monitoring_stack`: adpulse-monitoring network, tmpfs textfile volume (D022), prometheus, alertmanager, grafana, node-exporter (D023), cadvisor (D024). The healer variable exists but is not used yet (Phase 8).
+- Roots: `envs/local` (workspace = env, `staging.tfvars`/`prod.tfvars`, guard) and `monitoring/local`.
+- `config/nginx/nginx.conf.tftpl`: resolver 127.0.0.11 valid=5s with a variable `proxy_pass`, X-Request-ID, 2s timeouts, next_upstream, JSON logs, `/metrics` and `/admin` blocked (D028).
+- `scripts/terraform.sh` loads secrets from .env as TF_VAR_* and computes `env_networks` for monitoring (D021).
+- Make targets: `infra`, `plan-infra`, `monitoring`, `plan-monitoring`, `lint-terraform`, `down`.
+- Bootstrap configs: `monitoring/prometheus/prometheus.yml` (self-scrape), `alertmanager.yml` (null receiver), Grafana datasource and dashboard provider.
+
+### Problems hit and fixed
+1. **Secret exposure (my mistake):** a `bash -x` debug run of scripts/terraform.sh printed GRAFANA_ADMIN_PASSWORD in Claude's tool output. It was **rotated immediately** in .env (still mode 600) before any Grafana container existed, so the leaked value was never used. Lesson: never use `bash -x` on scripts that read secrets. To be recorded in SECURITY.md (Phase 11).
+2. An empty `grep` under pipefail broke `scripts/terraform.sh monitoring` when no env networks existed yet → `|| true`.
+3. The provider's `upload` fails on read-only containers, even for volume paths → D025.
+4. Perpetual diffs (network gateway → forced replacement, memory_swap, label=disable, healthcheck timings) → D026, no ignore_changes.
+
+### Phase 5 DoD (2026-10-07)
+- `make lint-terraform`: fmt -check OK, validate "Success" in both roots.
+- Applied monitoring (15 resources), staging, prod (18 resources each), then monitoring again (Prometheus joined both env networks).
+- `docker ps --filter label=com.adpulse.env=<env>`: all 8 staging and 8 prod containers Up, every one with a healthcheck **healthy** (loadgen has none by design). All 5 monitoring containers healthy.
+- **Idempotency:** a second `terraform plan` shows "No changes" for staging, prod and monitoring.
+- Default workspace: plan refused with the message "env must be staging, prod or aws-prod. In envs/local the env IS the Terraform workspace: run 'make infra ENV=staging' ...", exit 1.
+- Published ports: only 127.0.0.1:{3000,8080,8081,9090,9093}; DB and Redis are not published.
+- nginx (both envs): /nginx-health 200, /metrics 404, /admin 404, /v1/ad 502 (expected: no API replicas until Phase 6), X-Request-ID echoed and logged as JSON.
+- Toxiproxy: proxies postgres :15432 → postgres-staging:5432 and redis :16379 → redis-staging:6379 enabled.
+- Backups running; node-exporter exposes `adpulse_backup_*{env="staging"|"prod"}` from the textfile volume.
+- Memory limits: 3712 MB across 21 containers; plus 4 API replicas × 256 MB (Phase 6) = **4736 MB, under the 6144 MB cap**.
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.

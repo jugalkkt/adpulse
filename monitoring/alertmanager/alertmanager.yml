@@ -1,0 +1,6 @@
+# Phase 5 bootstrap config: a receiver that drops everything. Phase 7 adds the
+# healer webhook, grouping and inhibition rules.
+route:
+  receiver: "null"
+receivers:
+  - name: "null"
