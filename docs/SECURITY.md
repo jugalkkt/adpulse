@@ -80,7 +80,20 @@ Audit of all 27 running AdPulse containers (`docker inspect`, 2026-10-07):
 
 ## 7. Scan results
 
-_Filled in from `make scan` and `make sbom` below._
+`make scan TAG=cdee903` and `make sbom TAG=cdee903` (2026-10-07, Trivy 0.75.0, gitleaks 8.30.0):
+
+| Check | Result |
+|---|---|
+| Trivy image scan, CRITICAL with a fix (gate) | **0** in all 5 images (base, api, postgres, healer, chaos-stress); exit 0 |
+| Trivy image scan, HIGH with a fix (report) | **0** |
+| Trivy secret scan in images | none |
+| Trivy config scan (6 Dockerfiles, Terraform) | **0** HIGH/CRITICAL misconfigurations |
+| gitleaks, full history | **no leaks** (32 commits) |
+| SBOM (CycloneDX) | base 128, api 152, postgres 147, healer 162, chaos-stress 170 components |
+
+How it got there:
+- The first scan (Phase 10) found 1 fixable CRITICAL (CVE-2025-68121) and 21 HIGH, all in `gosu` in the Postgres image, so `gosu` was removed (D059).
+- The first config scan found DS-0002 (no `USER`) in 3 Dockerfiles; every image now defaults to a non-root user (D062).
 
 ## 8. CI/CD
 

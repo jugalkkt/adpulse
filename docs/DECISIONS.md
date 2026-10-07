@@ -402,3 +402,8 @@ Starlette 1.7 warns that `httpx` with its TestClient is deprecated in favour of 
 - **Date:** 2026-10-07
 - **Decision:** `ENV BROKEN_RELEASE=false` in the API image's test stage.
 - **Why:** Unit tests must run with controlled settings, and the rollback demo needed a defect that tests cannot see (an environment flag) but a real environment can. Without the pin, CI would have blocked the demo release before it reached staging.
+
+### D062: Every image defaults to a non-root USER
+- **Date:** 2026-10-07
+- **Decision:** `adpulse-base` ends with `USER adpulse`, `adpulse-postgres` with `USER postgres`, the Puppet tools image with `USER nobody` (HOME=/tmp). Derived images switch to `USER root` only for their install steps.
+- **Why:** Trivy config scan DS-0002 (HIGH) in 3 Dockerfiles. Runtime users were already non-root via Terraform and Ansible, but an image's default should be safe too, so a plain `docker run` can't run as root. Verified: all tests, the Postgres image checks and puppet-lint pass; config scan 0 findings.

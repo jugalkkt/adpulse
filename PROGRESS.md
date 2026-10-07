@@ -12,7 +12,8 @@
 - **Phase 8: DONE** (2026-10-07). DoD passed. The healer is live (dry-run off).
 - **Phase 9: DONE** (2026-10-07). DoD passed. 13 chaos runs (10 scenarios in staging, a db-down re-run, a 2-run prod game day), each with an RCA. deploy-bad-release follows in Phase 10.
 - **Phase 10: DONE** (2026-10-07). DoD passed. Both envs run `18a0065` (deployed by CD and promote). The runner is registered and runs from Jugal's terminal (`~/actions-runner/run.sh`).
-- **Phase 11:** next (security pass).
+- **Phase 11: DONE** (2026-10-07). DoD passed. Both envs on `cdee903` (rolled out with `make up` under a silence).
+- **Phase 12:** next (AWS). Starts with 🧑 USER ACTIONS 12.1–12.2 (console: MFA, budget, IAM user, `aws configure`), then 🛑 Q7/Q8/Q9/Q10.
 
 ## Phase 0: Preflight
 
@@ -323,6 +324,21 @@ Raw logs of the failed attempts are kept in `incidents/raw/` (gitignored).
   - Recorder: readyz 503 on 66 probes (12:53:46–12:55:16), 0 failed ad requests. MTTD 103.7 s, MTTR 150.7 s. RCA: `docs/rca/2026-10-07-1253-deploy-bad-release-staging.md`.
   - Reverted (`18a0065`) → CI/CD → staging → promote → prod.
 - Screenshot list: `docs/screenshots/README.md` (Jugal captures them in Phase 12.12).
+
+## Phase 11: Security pass
+
+### Done (2026-10-07)
+- Section 15, checked item by item against the running system; documented in `docs/SECURITY.md` (control / where / how verified, plus 12 accepted risks).
+- Container audit (27 containers): 27/27 no-new-privileges, 27/27 cap_drop ALL with 0 cap_add, 26/27 read-only rootfs (toxiproxy exception), 25/27 non-root (cadvisor and socket-proxy accepted), all memory-limited (5,056 MB total).
+- Network: published ports only 127.0.0.1:{3000, 8080, 8081, 9090, 9093}; Redis NOAUTH without password; DB unreachable from another network.
+- Images: all 11 registry images pinned by digest; FROM lines pinned.
+- Fixes: gosu removed (D059, Phase 10); non-root USER in every image (D062); SBOM in CI (upload-artifact v7.0.2 pinned by SHA); `sbom/` gitignored.
+- Rollout: commit cdee903, `make up` under a 20 min silence for staging/prod/host: exit 0 in 362 s, both smoke tests PASS.
+
+### Phase 11 DoD (2026-10-07)
+- `make scan TAG=cdee903`: exit 0; **0 fixable CRITICAL** (and 0 fixable HIGH) in 5 images; config scan 0 findings.
+- gitleaks full history: **no leaks** (32 commits).
+- SECURITY.md complete (the AWS section follows in Phase 12).
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.
