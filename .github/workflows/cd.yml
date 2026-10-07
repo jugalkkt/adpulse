@@ -1,0 +1,64 @@
+# CD to staging: after CI succeeds for a PUSH to main, build on the laptop's
+# self-hosted runner, roll out to staging, smoke test; roll back on failure.
+# Prod is never automatic: see promote.yml (manual approval, D056).
+name: CD (staging)
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One deploy at a time across CD and promote.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-staging:
+    # Never for pull requests or forks: only a successful CI run of a push to main.
+    if: >-
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: [self-hosted, adpulse-local]
+    timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - id: tag
+        run: echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Build images
+        run: make build TAG=${{ steps.tag.outputs.tag }}
+      - name: Rolling deploy to staging
+        run: make deploy ENV=staging TAG=${{ steps.tag.outputs.tag }}
+
+  smoke-staging:
+    needs: deploy-staging
+    runs-on: [self-hosted, adpulse-local]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Smoke test staging
+        run: bash scripts/smoke_test.sh staging
+      - name: Automatic rollback (smoke failed)
+        if: failure()
+        run: |
+          make rollback ENV=staging
+          bash scripts/smoke_test.sh staging
+          echo "::error::Staging smoke test failed for ${{ needs.deploy-staging.outputs.tag }}; rolled back."
+          exit 1
+      - name: Next step
+        run: |
+          {
+            echo "### Staging is on \`${{ needs.deploy-staging.outputs.tag }}\` and smoke tests passed"
+            echo "Promote to prod: Actions → **Promote to prod** → Run workflow (tag \`${{ needs.deploy-staging.outputs.tag }}\`)."
+          } >> "$GITHUB_STEP_SUMMARY"

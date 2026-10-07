@@ -71,7 +71,9 @@ lock: ## Re-lock Python dependencies with hashes (app/requirements*.in -> .txt)
 	  for f in requirements requirements-dev; do \
 	    /tmp/v/bin/pip-compile -q --generate-hashes --allow-unsafe --strip-extras --no-header -o $$f.txt $$f.in; done'
 
-lint: lint-puppet lint-chef lint-app lint-terraform lint-ansible lint-monitoring ## Run all linters
+lint: lint-static lint-app ## Run all linters
+
+lint-static: lint-puppet lint-chef lint-terraform lint-ansible lint-monitoring lint-docker lint-shell lint-actions ## All linters that need no built image
 
 CINC_WORKSTATION := cincproject/workstation:26.3.0@sha256:b19f9949b1012e5a9cd93b68ee1d00b705fc66e1d47f4283471cddf293500830
 
@@ -125,8 +127,28 @@ test: ## Unit + integration tests (throwaway Postgres/Redis via compose)
 	$(MAKE) --no-print-directory test-rules
 	$(MAKE) --no-print-directory test-healer
 
-scan: ## Trivy image/config scans and gitleaks
-	$(call todo,Phase 11)
+scan: ## Trivy image scan (fail on fixable CRITICAL), config scan, gitleaks on full history
+	bash scripts/scan.sh images $(TAG)
+	bash scripts/scan.sh config
+	bash scripts/scan.sh secrets
+
+sbom: ## CycloneDX SBOM for every image (sbom/*.cdx.json)
+	bash scripts/scan.sh sbom $(TAG)
+
+HADOLINT := hadolint/hadolint:v2.15.1@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d
+ACTIONLINT := rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+
+lint-docker: ## hadolint on every Dockerfile
+	@for f in $$(find docker -name '*Dockerfile*'); do echo "hadolint $$f"; docker run --rm -i $(HADOLINT) hadolint --failure-threshold warning - < $$f || exit 1; done
+
+lint-actions: ## actionlint on GitHub workflows
+	docker run --rm -v "$(CURDIR):/repo:ro" -w /repo $(ACTIONLINT) -color
+
+lint-shell: ## shellcheck on scripts
+	shellcheck scripts/*.sh
+
+lint-yaml: ## yamllint on the repo
+	$(if $(shell command -v yamllint),yamllint -c .yamllint.yml .,pre-commit run yamllint --all-files)
 
 check-env:
 	@case "$(ENV)" in staging|prod) ;; *) echo "ENV must be staging or prod (got '$(ENV)')" >&2; exit 1;; esac
@@ -176,7 +198,7 @@ smoke: check-env ## Smoke test ENV through nginx
 ANSIBLE_COLLECTIONS := $(firstword $(wildcard $(HOME)/.local/share/pipx/venvs/ansible/lib/python3*/site-packages))
 
 lint-ansible: ## ansible-lint
-	cd ansible && ANSIBLE_COLLECTIONS_PATH="$(ANSIBLE_COLLECTIONS)" ansible-lint playbooks/
+	cd ansible && $(if $(ANSIBLE_COLLECTIONS),ANSIBLE_COLLECTIONS_PATH="$(ANSIBLE_COLLECTIONS)",) ansible-lint playbooks/
 
 up: ## From zero to everything running (both envs + monitoring)
 	$(MAKE) secrets

@@ -1,7 +1,10 @@
 # Shared variables. Select the environment with -e env=staging|prod.
 repo_root: "{{ playbook_dir | dirname | dirname }}"
-env_file: "{{ repo_root }}/.env"
-state_dir: "{{ repo_root }}/deploy/state"
+# CD runs from the runner's own checkout; ADPULSE_HOME (set in the runner's
+# .env) points back at the working copy that holds .env and deploy/state.
+adpulse_home: "{{ lookup('ansible.builtin.env', 'ADPULSE_HOME') | default(repo_root, true) }}"
+env_file: "{{ adpulse_home }}/.env"
+state_dir: "{{ adpulse_home }}/deploy/state"
 alertmanager_url: http://127.0.0.1:9093
 
 # Per-environment settings (keys must match the Terraform envs).

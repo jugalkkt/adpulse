@@ -1,0 +1,5 @@
+# Lint tools for the CI lint job (pinned; same versions as local, docs/VERSIONS.md)
+ruff==0.16.10
+yamllint==1.38.0
+ansible==14.5.0
+ansible-lint==26.9.0

@@ -1,0 +1,62 @@
+# Promote to prod: the manual approval gate (D056). Deploys a tag that is
+# currently live and smoke-tested in staging; rolls prod back on failure.
+name: Promote to prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (git short SHA). Empty = whatever staging runs now."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-prod:
+    runs-on: [self-hosted, adpulse-local]
+    timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: tag
+        name: Resolve the tag and check it is what staging runs
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          staging="$(/usr/bin/jq -r .current "$ADPULSE_HOME/deploy/state/staging.json")"
+          tag="${INPUT_TAG:-$staging}"
+          if [ "$tag" != "$staging" ]; then
+            echo "::error::Refusing: $tag is not the release staging runs ($staging). Deploy and test it in staging first."
+            exit 1
+          fi
+          git checkout --quiet "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Staging must pass its smoke test right now
+        run: bash scripts/smoke_test.sh staging
+      - name: Rolling deploy to prod
+        run: make deploy ENV=prod TAG=${{ steps.tag.outputs.tag }}
+
+  smoke-prod:
+    needs: deploy-prod
+    runs-on: [self-hosted, adpulse-local]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Smoke test prod
+        run: bash scripts/smoke_test.sh prod
+      - name: Automatic rollback (smoke failed)
+        if: failure()
+        run: |
+          make rollback ENV=prod
+          bash scripts/smoke_test.sh prod
+          echo "::error::Prod smoke test failed for ${{ needs.deploy-prod.outputs.tag }}; rolled back."
+          exit 1
