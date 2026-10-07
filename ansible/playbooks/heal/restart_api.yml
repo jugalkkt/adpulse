@@ -11,6 +11,7 @@
     instance: ""
     reason: ""
     mode: ""
+    expected_replicas: 2
   tasks:
     - name: List API replicas of the env
       community.docker.docker_host_info:
@@ -57,7 +58,16 @@
       ansible.builtin.debug:
         msg: "env={{ env }} reason={{ reason }} mode={{ mode }} replicas={{ replicas | map(attribute='name') | list }} targets={{ targets }}"
 
-    - name: Fail when there is nothing to restart
+    # A hung replica fires BOTH ApiReplicaDown variants (unreachable + missing);
+    # whichever runs second finds the replica already restarted. That is
+    # success, not a reason to escalate (incident 2026-10-07 api-hang).
+    - name: Nothing to restart and enough healthy replicas -> already healed
+      ansible.builtin.meta: end_play
+      when: >-
+        targets | length == 0
+        and (replicas | selectattr('state', 'equalto', 'running') | list | length) >= expected_replicas | int
+
+    - name: Fail when there is nothing to restart but replicas are missing
       ansible.builtin.fail:
         msg: "No matching replica to restart (instance={{ instance }}, container={{ container }}); a replica may be missing entirely."
       when: targets | length == 0
