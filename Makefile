@@ -8,6 +8,11 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
 SCENARIO ?=
 ID ?=
 
+# --provenance=false: BuildKit's default provenance attestation changes the
+# image ID on every build, which would make Terraform recreate containers
+# (e.g. restart Postgres) after every commit (docs/DECISIONS.md D029).
+BUILD_FLAGS := --provenance=false
+
 # Targets that later phases fill in; they fail loudly until then.
 define todo
 	@echo "make $@: not implemented yet ($(1))" >&2; exit 1
@@ -28,17 +33,17 @@ secrets: ## Create .env from .env.example (never overwrites values)
 build: build-base build-api build-postgres ## Build all images tagged with the git SHA and dev
 
 build-base: ## Build adpulse-base (Ubuntu + Puppet/OpenVox hardening)
-	docker build --progress=plain --build-arg GIT_SHA=$(TAG) \
+	docker build $(BUILD_FLAGS) --progress=plain \
 	  -f docker/base/Dockerfile -t adpulse-base:$(TAG) -t adpulse-base:dev .
 
 build-api: build-base ## Build adpulse-api (FROM adpulse-base:<sha>) and its test image
-	docker build --progress=plain --build-arg BASE_IMAGE=adpulse-base:$(TAG) --build-arg GIT_SHA=$(TAG) \
+	docker build $(BUILD_FLAGS) --progress=plain --build-arg BASE_IMAGE=adpulse-base:$(TAG) --build-arg GIT_SHA=$(TAG) \
 	  -f docker/api/Dockerfile --target runtime -t adpulse-api:$(TAG) -t adpulse-api:dev .
-	docker build -q --build-arg BASE_IMAGE=adpulse-base:$(TAG) --build-arg GIT_SHA=$(TAG) \
+	docker build $(BUILD_FLAGS) -q --build-arg BASE_IMAGE=adpulse-base:$(TAG) --build-arg GIT_SHA=$(TAG) \
 	  -f docker/api/Dockerfile --target test -t adpulse-api-test:$(TAG) -t adpulse-api-test:dev .
 
 build-postgres: ## Build adpulse-postgres (Postgres + Chef/Cinc config + backup scripts)
-	docker build --progress=plain --build-arg GIT_SHA=$(TAG) \
+	docker build $(BUILD_FLAGS) --progress=plain \
 	  -f docker/postgres/Dockerfile -t adpulse-postgres:$(TAG) -t adpulse-postgres:dev .
 
 lock: ## Re-lock Python dependencies with hashes (app/requirements*.in -> .txt)
