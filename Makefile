@@ -217,9 +217,11 @@ up: ## From zero to everything running (both envs + monitoring)
 down: ## Destroy local stacks (asks first; label-scoped)
 	@read -r -p "Destroy local staging, prod and monitoring stacks (data volumes included)? Type yes: " a; [ "$$a" = yes ] || { echo aborted; exit 1; }
 	-docker ps -aq --filter label=com.adpulse.project=adpulse --filter label=com.adpulse.role=api | xargs -r docker rm -f
-	bash scripts/terraform.sh env staging destroy -input=false -auto-approve -var-file=staging.tfvars -var image_tag=$(TAG)
-	bash scripts/terraform.sh env prod destroy -input=false -auto-approve -var-file=prod.tfvars -var image_tag=$(TAG)
-	bash scripts/terraform.sh monitoring destroy -input=false -auto-approve -var image_tag=$(TAG)
+	@# Known issue (D068): Prometheus sits on the env networks, so detach it first:
+	@#   bash scripts/terraform.sh monitoring destroy -target=module.monitoring.docker_container.prometheus -var image_tag=<tag>
+	bash scripts/terraform.sh env staging destroy -input=false -auto-approve -var-file=staging.tfvars -var image_tag=$$(bash scripts/applied_tag.sh env staging $(TAG))
+	bash scripts/terraform.sh env prod destroy -input=false -auto-approve -var-file=prod.tfvars -var image_tag=$$(bash scripts/applied_tag.sh env prod $(TAG))
+	bash scripts/terraform.sh monitoring destroy -input=false -auto-approve -var image_tag=$$(bash scripts/applied_tag.sh monitoring $(TAG))
 
 CONFIRM_PROD ?=
 

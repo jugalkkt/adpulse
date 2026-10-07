@@ -14,7 +14,7 @@
 - **Phase 10: DONE** (2026-10-07). DoD passed. Both envs run `18a0065` (deployed by CD and promote). The runner is registered and runs from Jugal's terminal (`~/actions-runner/run.sh`).
 - **Phase 11: DONE** (2026-10-07). DoD passed. Both envs on `cdee903` (rolled out with `make up` under a silence).
 - **Phase 12: DONE.** **AWS TORN DOWN at 2026-10-07T17:04:55Z** (verified empty); access key deleted (verified invalid). Jugal should check Billing → Credits on 2026-10-08.
-- **Phase 13:** next (README, LEARNING.md, INTERVIEW_PREP.md).
+- **Phase 13:** in progress (README, LEARNING.md, INTERVIEW_PREP.md). The from-scratch `make up` test was **skipped** at Jugal's choice after `make down` failed on cross-stack links (D068).
 
 ## Phase 0: Preflight
 
@@ -385,3 +385,10 @@ Raw logs of the failed attempts are kept in `incidents/raw/` (gitignored).
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.
+
+## Final acceptance: from-scratch test (2026-10-07)
+- Attempt 1: `make down` failed: no images for HEAD `a5c7a09`. Fixed with `scripts/applied_tag.sh` (state tag → deployed release → TAG).
+- Attempt 2: staging destroy timed out removing `adpulse-staging`, because Prometheus is still attached. The order was changed to monitoring first.
+- Attempt 3: monitoring destroy timed out removing `adpulse-textfile`, because it is mounted by `backup-agent-prod`.
+- 🛑 R9 (same symptom after 2 fixes) → Jugal chose: **skip the test, restore with `make up`, document** (D068). Order put back to envs first, with the manual-order note in the `down` target.
+- The partial teardowns deleted local staging, prod and monitoring data (Prometheus history, Grafana, DB volumes). RCA evidence was already saved in `incidents/` and `docs/rca/`.

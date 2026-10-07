@@ -435,3 +435,13 @@ Starlette 1.7 warns that `httpx` with its TestClient is deprecated in favour of 
 - **Date:** 2026-10-07
 - **Decision:** `scripts/aws_down.sh` destroys the stack first (it needs the VM's IP), then the VM and network. Each destroy runs as `plan -destroy -out` → you type `yes` → apply the saved plan. It finishes with the five plan 12.13 AWS CLI checks plus the key pair, and fails if anything is left.
 - **Why:** This is the same sequence that was run by hand on 2026-10-07, so the next teardown is one command and still obeys R4. A failed AWS call (for example, the deleted access key) aborts the script instead of counting as "0 left". This was tested: with the dead key the script exits with AuthFailure.
+
+### D068: `make down` known issue: cross-stack links; the from-scratch test was skipped
+- **Date:** 2026-10-07
+- **What happened:** The final-acceptance test (`make down` → delete images → `make up`) found three problems in `make down`:
+  1. It looked up images for HEAD, which may never have been built. **Fixed:** `scripts/applied_tag.sh` reads the tag from Terraform state, or else the env's deployed release.
+  2. Prometheus (monitoring stack) is attached to the env networks, so an env's network can't be removed while monitoring exists.
+  3. Each env's backup-agent mounts monitoring's `adpulse-textfile` volume, so monitoring can't be destroyed completely while an env exists.
+- **Decision (Jugal, R9 checkpoint):** skip the from-scratch test, restore with `make up`, and document the issue. Issues 2 and 3 remain open.
+- **Manual order that avoids both links (not yet run end to end):** targeted destroy of the Prometheus container, then staging, then prod, then the rest of monitoring (the comment in the `down` target).
+- **Proper fix (later):** do this in `make down`, or move the textfile volume into its own small root so that only one direction of dependency is left.

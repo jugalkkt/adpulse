@@ -238,8 +238,9 @@ def summary() -> Path:
                 "slower than 250 ms. API-side = all traffic (loadgen + probes) from Prometheus: 5xx / fallback ads of requests "
                 "in the incident window (`evidence.json`).",
                 "",
-                "| Scenario | Env | Layer | Detected by | Healed by | MTTD | MTTR | User impact (failed / fallback / slow) | RCA |",
-                "|---|---|---|---|---|---|---|---|---|",
+                "| Scenario | Env | Layer | Detected by | Healed by | MTTD | MTTR | User impact (failed / fallback / slow) "
+                "| API-side 5xx / fallback | Note | RCA |",
+                "|---|---|---|---|---|---|---|---|---|---|---|",
                 *rows,
                 "",
             ]
