@@ -340,5 +340,12 @@ Raw logs of the failed attempts are kept in `incidents/raw/` (gitignored).
 - gitleaks full history: **no leaks** (32 commits).
 - SECURITY.md complete (the AWS section follows in Phase 12).
 
+## Phase 12: AWS (in progress)
+
+### Q7 (2026-10-07)
+- Latency from the laptop (median HTTPS first byte; ping blocked; TCP connect times were a meaningless 3 ms because a transparent proxy on the network answers the handshake): ap-south-2 107 ms, **ap-south-1 128 ms**, ap-southeast-1 201 ms, me-central-1 283 ms.
+- Jugal chose **ap-south-1 (Mumbai)**.
+- Next: 🧑 12.1–12.2 (root MFA, check plan/credits, zero-spend budget, IAM user adpulse-cli with AmazonEC2FullAccess, access key, `aws configure --profile adpulse`), then 12.3 identity check, Q8 (instance type + prices).
+
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.
