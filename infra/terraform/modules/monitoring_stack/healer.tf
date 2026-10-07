@@ -92,10 +92,12 @@ data "docker_image" "healer" {
 }
 
 resource "docker_container" "healer" {
-  count         = var.enable_healer ? 1 : 0
-  name          = "healer"
-  image         = data.docker_image.healer[0].id
-  user          = "${var.healer_uid}:${var.healer_uid}"
+  count = var.enable_healer ? 1 : 0
+  name  = "healer"
+  image = data.docker_image.healer[0].id
+  # Host uid (to write <repo>/incidents) + the adpulse group (10001), which is
+  # what lets it read /opt/adpulse (0750, hardened by Puppet) in the image.
+  user          = "${var.healer_uid}:10001"
   restart       = "unless-stopped"
   memory        = var.limits.healer.memory
   memory_swap   = var.limits.healer.memory
@@ -110,7 +112,7 @@ resource "docker_container" "healer" {
     "PROMETHEUS_URL=http://prometheus:9090",
   ]
   tmpfs = {
-    "/tmp" = "rw,nosuid,size=64m,uid=${var.healer_uid},gid=${var.healer_uid}"
+    "/tmp" = "rw,nosuid,size=64m,uid=${var.healer_uid},gid=10001"
   }
   capabilities {
     drop = ["ALL"]
