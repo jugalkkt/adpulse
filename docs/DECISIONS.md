@@ -407,3 +407,26 @@ Starlette 1.7 warns that `httpx` with its TestClient is deprecated in favour of 
 - **Date:** 2026-10-07
 - **Decision:** `adpulse-base` ends with `USER adpulse`, `adpulse-postgres` with `USER postgres`, the Puppet tools image with `USER nobody` (HOME=/tmp). Derived images switch to `USER root` only for their install steps.
 - **Why:** Trivy config scan DS-0002 (HIGH) in 3 Dockerfiles. Runtime users were already non-root via Terraform and Ansible, but an image's default should be safe too, so a plain `docker run` can't run as root. Verified: all tests, the Postgres image checks and puppet-lint pass; config scan 0 findings.
+
+### D063: AWS sizing and region
+- **Date:** 2026-10-07
+- **Decision:** ap-south-1 (Mumbai) and c7i-flex.large (2 vCPU / 4 GiB, $0.0848/h), Ubuntu 24.04 AMI looked up from Canonical's owner ID with an x86_64 filter.
+- **Why:** Q7: latency was measured as HTTPS first byte, because a transparent proxy on the campus network made TCP connect times a meaningless 3 ms for every region (Mumbai 128 ms vs Hyderabad 107 ms; Mumbai has the widest instance availability). Q8: the measured stack used ≈ 783 MiB plus OS, Docker and bootstrap, so 2 GiB would be tight, and ~$2/day is about 1.7% of the $120 credits. Prices came from AWS's public pricing data, because the least-privilege IAM user cannot call the Pricing API.
+
+### D064: One VM; Docker over SSH with the same Terraform modules
+- **Date:** 2026-10-07
+- **Decision:** `infra/terraform/aws` creates the network and the VM. `infra/terraform/envs/aws` drives the VM's Docker with the **same** `adpulse_stack` and `monitoring_stack` modules over `ssh://ubuntu@host`. Images ship with `docker save | gzip` → Ansible copy → `docker load` (255 MB, 67 s), with no registry.
+- **Why:** The plan's design: one definition of the stack, run locally and in the cloud. It worked on the first apply (36 resources in 61 s), so the compose fallback was not needed. All the local fixes (keep_firing_for, fast-fail exporter DNS, readiness gate) applied unchanged.
+- **Notes:**
+  - The provider download from GitHub release assets timed out on the campus network, so `terraform init -plugin-dir` used the identical local provider, checked against the same lock-file hashes.
+  - The docker CLI's SSH transport cannot take a key flag, so a short-lived `ssh-agent` is used and `~/.ssh/config` is left untouched.
+
+### D065: Environment-agnostic monitoring rules
+- **Date:** 2026-10-07
+- **Decision:** `env:adpulse_api_replicas_expected:count` = `count by (env)(up{job="postgres"}) * 0 + 2`, which means every env that has a Postgres exporter expects 2 replicas. `prometheus.aws.yml` lists only aws-prod targets; Ansible installs it as `prometheus.yml` on the VM, and promtool lints both files.
+- **Why:** The hard-coded staging/prod expectation would have fired "replica missing" for two absent envs on AWS. Finding: the new rule fires for a brand-new env in the minute between Terraform creating it and the first deploy. The healer correctly escalated (`replicas=[]`). Action: silence a new env's API alerts until its first deploy.
+
+### D066: Grafana on AWS was not used through the tunnel
+- **Date:** 2026-10-07
+- **Decision:** The Grafana screenshot is from the local Grafana.
+- **Why:** Through the SSH tunnel (local port 13000), the browser could not load the Prometheus plugin, because Grafana's `appUrl` is `http://localhost:3000/`, making it a cross-origin request to the *local* Grafana. The fix (`GF_SERVER_ROOT_URL=http://localhost:13000/`) was not worth another apply for a screenshot. Prometheus on AWS was verified directly (9/9 targets up).

@@ -13,7 +13,8 @@
 - **Phase 9: DONE** (2026-10-07). DoD passed. 13 chaos runs (10 scenarios in staging, a db-down re-run, a 2-run prod game day), each with an RCA. deploy-bad-release follows in Phase 10.
 - **Phase 10: DONE** (2026-10-07). DoD passed. Both envs run `18a0065` (deployed by CD and promote). The runner is registered and runs from Jugal's terminal (`~/actions-runner/run.sh`).
 - **Phase 11: DONE** (2026-10-07). DoD passed. Both envs on `cdee903` (rolled out with `make up` under a silence).
-- **Phase 12:** AWS resources **destroyed and verified empty at 2026-10-07T17:04:55Z**. Waiting on Jugal to delete the access key (Q11).
+- **Phase 12: DONE.** **AWS TORN DOWN at 2026-10-07T17:04:55Z** (verified empty); access key deleted (verified invalid). Jugal should check Billing → Credits on 2026-10-08.
+- **Phase 13:** next (README, LEARNING.md, INTERVIEW_PREP.md).
 
 ## Phase 0: Preflight
 
@@ -377,7 +378,9 @@ Raw logs of the failed attempts are kept in `incidents/raw/` (gitignored).
   - Q10 → `infra/terraform/aws` destroy: **11 destroyed at 2026-10-07T17:04:55Z**.
   - Verified with the AWS CLI (ap-south-1, tag Project=AdPulse): 0 instances, 0 volumes, 0 Elastic IPs, 0 SGs, 0 VPCs, 0 `adpulse-aws` key pairs; i-09a1cb3cf4c8bdef7 = terminated; both Terraform states empty; SSH tunnel closed.
   - (Tooling slip: a `pkill -f` pattern matched its own shell twice. Use `pgrep -f '[x]…'`.)
-- Waiting on: 🧑 delete the `adpulse-cli` access key (and optionally the user) → 🛑 Q11.
+- 🧑 Jugal deleted the `adpulse-cli` access key. Verified: `aws sts get-caller-identity --profile adpulse` → `InvalidClientTokenId`. Deleting the IAM user itself (optional) was not confirmed.
+- 🛑 Q11 answered. **AWS TORN DOWN at 2026-10-07T17:04:55Z.**
+- Reminder for Jugal: check Billing → Credits on 2026-10-08. Expected usage ≈ 1.6 h × $0.0848 + disk + public IPv4, about $0.15.
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.

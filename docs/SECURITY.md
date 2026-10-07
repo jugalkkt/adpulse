@@ -107,7 +107,21 @@ How it got there:
 
 ## 9. AWS
 
-_Phase 12: root MFA, IAM user (not root), SSH key only, no password auth, SG restricted to Jugal's IP /32, IMDSv2 required, EBS encrypted, ufw, unattended-upgrades, default tags, zero-spend budget, same-day teardown, access key deleted._
+| Control | Where | Verified (2026-10-07) |
+|---|---|---|
+| Root user MFA; zero-spend budget | AWS console (Jugal, 12.1) | done by Jugal |
+| CLI uses an IAM user (`adpulse-cli`, AmazonEC2FullAccess only), never root keys; keys typed only into `aws configure` | 12.2 | `sts get-caller-identity` → `user/adpulse-cli`; Pricing API correctly denied |
+| Security group: 22 and 80 only from the operator's /32; all other inbound closed | `infra/terraform/aws` | plan showed `[redacted]/32` for both rules |
+| IMDSv2 required, hop limit 1 (containers cannot reach instance metadata); no instance profile | `aws_instance.metadata_options` | `curl 169.254.169.254` without a token → **401** |
+| EBS root volume encrypted, deleted on termination | `root_block_device` | plan `encrypted = true`; after destroy: 0 AdPulse volumes |
+| Default tags on every resource (Project, Owner, ManagedBy, Ephemeral) | provider `default_tags` | EC2 console screenshot (08) |
+| SSH: key only (ed25519, `~/.ssh/adpulse_aws`), no root login, no password auth | Puppet `adpulse::host` | new SSH sessions as ubuntu/adpulse worked; **password login refused**; noop re-run 0 changes |
+| Host firewall (ufw allow 22/80, then enable), unattended-upgrades, sysctl hardening, journald cap | Puppet `adpulse::host` | `/etc/adpulse/hardening-report.txt`; noop 0 changes |
+| Host backup dir and Docker log rotation | Chef `adpulse_db::host`; Docker `daemon.json` (10 MB × 3) | second converge 0/3 updated |
+| Docker-published ports bypass ufw | known Docker behaviour | **accepted**: the security group (/32) is the real boundary |
+| Monitoring UIs bound to the VM's localhost; reached only through an SSH tunnel | `envs/aws` (`bind_ip = 127.0.0.1`) | only port 80 open in the SG |
+| Same-day teardown | 12.13 | destroyed 2026-10-07T17:04:55Z; CLI checks: 0 instances, volumes, EIPs, SGs, VPCs, key pairs |
+| Access key deleted | Jugal (12.13.3) | `sts get-caller-identity` → `InvalidClientTokenId` |
 
 ## 10. Accepted risks
 
