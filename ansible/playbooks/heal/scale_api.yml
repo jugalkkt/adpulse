@@ -19,7 +19,12 @@
 
     - name: Count replicas
       ansible.builtin.set_fact:
-        indexes: "{{ api.containers | map(attribute='Labels') | map(attribute='com.adpulse.replica', default='0') | map('int') | select('gt', 0) | list }}"
+        # Label keys contain dots, so read them with .get() (map(attribute=...)
+        # would treat the dots as a nested path).
+        indexes: >-
+          {%- set out = [] -%}
+          {%- for c in api.containers -%}{%- set _ = out.append((c.Labels or {}).get('com.adpulse.replica', '0') | int) -%}{%- endfor -%}
+          {{ out | select('gt', 0) | list }}
 
     - name: Stop here when already at the maximum
       ansible.builtin.meta: end_play

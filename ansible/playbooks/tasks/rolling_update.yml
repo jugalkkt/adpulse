@@ -13,11 +13,12 @@
 
 - name: Work out which replica indexes to roll
   ansible.builtin.set_fact:
+    # Label keys contain dots, so read them with .get() (map(attribute=...)
+    # would treat the dots as a nested path and always return the default).
     replica_indexes: >-
-      {{ (range(1, env_cfg.replicas + 1) | list
-          + (api_containers.containers | map(attribute='Labels') | map(attribute='com.adpulse.replica', default='0')
-             | map('int') | select('gt', 0) | list))
-         | unique | sort }}
+      {%- set out = range(1, env_cfg.replicas + 1) | list -%}
+      {%- for c in api_containers.containers -%}{%- set _ = out.append((c.Labels or {}).get('com.adpulse.replica', '0') | int) -%}{%- endfor -%}
+      {{ out | select('gt', 0) | unique | sort }}
 
 - name: Roll replicas one at a time
   ansible.builtin.include_tasks: replica.yml

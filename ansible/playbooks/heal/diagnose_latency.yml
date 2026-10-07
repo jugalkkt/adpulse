@@ -5,7 +5,6 @@
   gather_facts: false
   vars:
     prometheus_url: "{{ lookup('ansible.builtin.env', 'PROMETHEUS_URL') | default('http://prometheus:9090', true) }}"
-    out_dir: "/data/diagnostics/{{ lookup('ansible.builtin.pipe', 'date -u +%Y%m%dT%H%M%SZ') }}-{{ env }}"
     pg_activity_sql: >-
       select pid, state, wait_event_type, wait_event, now() - query_start as running_for,
       left(query, 80) as query from pg_stat_activity where datname = 'adpulse'
@@ -13,6 +12,12 @@
       redis-cli -a "$(awk '/^requirepass/{print $2}' /tmp/redis.conf)" --no-auth-warning info stats
     p95_query: 'env:adpulse_http_request_duration_seconds:p95_1m{env="{{ env }}"}'
   tasks:
+    # set_fact evaluates the timestamp once (a plain var would re-run `date`
+    # every time it is used and scatter files across directories).
+    - name: Fix the snapshot directory name
+      ansible.builtin.set_fact:
+        out_dir: "/data/diagnostics/{{ lookup('ansible.builtin.pipe', 'date -u +%Y%m%dT%H%M%SZ') }}-{{ env }}"
+
     - name: Create the snapshot directory
       ansible.builtin.file:
         path: "{{ out_dir }}"
