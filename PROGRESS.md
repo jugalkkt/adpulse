@@ -2,7 +2,8 @@
 
 ## Current status
 - **Phase 0: DONE** (2026-10-07). DoD passed.
-- **Phase 1:** in progress. Next: repo files, then 🛑 Q2/Q3, then `gh auth login`.
+- **Phase 1: DONE** (2026-10-07). DoD passed. Repo: https://github.com/jugalkkt/adpulse (private).
+- **Phase 2:** in progress (base image with Puppet/OpenVox).
 
 ## Phase 0: Preflight
 
@@ -60,8 +61,15 @@
 - Global git identity already set: user.name `jugalkkt`, email `jugalkakkat@gmail.com`. Q3 still asks Jugal to confirm.
 - `gh`: not logged in yet.
 - Q2: GitHub user `jugalkkt`, repo **private**. Q3: commits as `jugalkkt <jugalkakkat@gmail.com>` (set in repo-local git config). `plan.md` stays local (gitignored).
-- First commit done.
-- **Next:** 🧑 `gh auth login` → `gh repo create adpulse --private --source . --push`.
+- First commit `a3c9d33`.
+- `gh auth login` done by Jugal. gh chose the **SSH** git protocol; Jugal's existing key `~/.ssh/id_ed25519` ("myKey" on GitHub) authenticates, so the remote is `git@github.com:jugalkkt/adpulse.git`.
+- `gh repo create adpulse --private --source . --remote origin --push`.
+
+### Phase 1 DoD (2026-10-07)
+- `git log`: `a3c9d33 chore: bootstrap repo, ...`; `origin/main` is at a3c9d33.
+- `gh repo view`: jugalkkt/adpulse, PRIVATE, default branch main.
+- `.env` is mode 600; `git ls-files | grep -c '^.env$'` prints 0.
+- `pre-commit run --all-files`: all hooks pass.
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.
