@@ -1,0 +1,9 @@
+# Allow-list: only what image builds need enters the build context.
+# Keeps .env, Terraform state, .git and incident data out of every image.
+*
+!config/puppet/
+!config/chef/
+!app/
+!healer/
+!ansible/
+!docker/

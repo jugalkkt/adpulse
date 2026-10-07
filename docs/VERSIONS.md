@@ -28,9 +28,17 @@ Host facts: x86_64, 8 CPUs, 15 GiB RAM, cgroup v2, Docker storage driver `overla
 
 | Image | Tag | Digest | Used for |
 |---|---|---|---|
+| ubuntu | 24.04 | `sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55` | base image, puppet tools image |
 | zricethezav/gitleaks | v8.30.0 | `sha256:691af3c7c5a48b16f187ce3446d5f194838f91238f27270ed36eef6359a574d9` | pre-commit secret scan |
 
 _More are added from Phase 2 onwards._
+
+## Config-management tools (inside containers only)
+
+| Tool | Version | Where |
+|---|---|---|
+| OpenVox agent (Puppet) | 8.29.0-1+ubuntu24.04 (repo `openvox8`) | `docker/base/Dockerfile` (purged after apply), `docker/tools/puppet.Dockerfile` |
+| puppet-lint | 5.1.1 (rubygems) | `docker/tools/puppet.Dockerfile` |
 
 ## Pre-commit hooks (`.pre-commit-config.yaml`, pinned via `pre-commit autoupdate` on 2026-10-07)
 

@@ -13,7 +13,7 @@ define todo
 	@echo "make $@: not implemented yet ($(1))" >&2; exit 1
 endef
 
-.PHONY: help check secrets build lint test scan infra monitoring deploy rollback status \
+.PHONY: help check secrets build build-base lint lint-puppet tools-puppet test scan infra monitoring deploy rollback status \
         up down chaos chaos-stop rca aws-plan aws-up aws-bootstrap aws-deploy aws-down urls
 
 help: ## List targets
@@ -25,11 +25,23 @@ check: ## Print the machine report (OS, tools, ports)
 secrets: ## Create .env from .env.example (never overwrites values)
 	@bash scripts/gen_secrets.sh
 
-build: ## Build all images tagged with the git SHA and dev
-	$(call todo,Phase 2-4)
+build: build-base ## Build all images tagged with the git SHA and dev
 
-lint: ## Run all linters
-	$(call todo,Phase 2+)
+build-base: ## Build adpulse-base (Ubuntu + Puppet/OpenVox hardening)
+	docker build --progress=plain --build-arg GIT_SHA=$(TAG) \
+	  -f docker/base/Dockerfile -t adpulse-base:$(TAG) -t adpulse-base:dev .
+
+lint: lint-puppet ## Run all linters
+
+tools-puppet:
+	@docker build -q -f docker/tools/puppet.Dockerfile -t adpulse-tools-puppet:dev docker/tools >/dev/null
+
+lint-puppet: tools-puppet ## puppet parser/epp validate + puppet-lint
+	docker run --rm --network none -v "$(CURDIR)/config/puppet:/work:ro" adpulse-tools-puppet:dev bash -euo pipefail -c '\
+	  puppet parser validate manifests/site.pp modules/adpulse/manifests/*.pp && \
+	  puppet epp validate modules/adpulse/templates/*.epp && \
+	  puppet-lint --fail-on-warnings --relative manifests modules && \
+	  echo "puppet lint: clean"'
 
 test: ## Unit and integration tests, healer tests, promtool rule tests
 	$(call todo,Phase 3)
