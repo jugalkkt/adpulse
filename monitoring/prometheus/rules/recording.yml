@@ -1,0 +1,54 @@
+# Per-environment aggregates used by alerts, SLOs and dashboards.
+# Naming: level:metric:operation (Prometheus convention).
+groups:
+  - name: adpulse-recording
+    interval: 5s
+    rules:
+      # ---- traffic (product route only)
+      - record: env:adpulse_http_requests:rate1m
+        expr: sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad"}[1m]))
+
+      - record: env:adpulse_http_5xx:ratio_rate1m
+        expr: |
+          (
+            sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad", status=~"5.."}[1m]))
+            or sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad"}[1m])) * 0
+          )
+          / sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad"}[1m]))
+
+      - record: env:adpulse_http_5xx:ratio_rate5m
+        expr: |
+          (
+            sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad", status=~"5.."}[5m]))
+            or sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad"}[5m])) * 0
+          )
+          / sum by (env) (rate(adpulse_http_requests_total{route="/v1/ad"}[5m]))
+
+      # ---- latency
+      - record: env:adpulse_http_request_duration_seconds:p95_1m
+        expr: histogram_quantile(0.95, sum by (env, le) (rate(adpulse_http_request_duration_seconds_bucket{route="/v1/ad"}[1m])))
+
+      - record: env:adpulse_http_request_duration_seconds:p99_1m
+        expr: histogram_quantile(0.99, sum by (env, le) (rate(adpulse_http_request_duration_seconds_bucket{route="/v1/ad"}[1m])))
+
+      # ---- ad sources, cache, fallback
+      - record: env_source:adpulse_ad_served:rate1m
+        expr: sum by (env, source) (rate(adpulse_ad_served_total[1m]))
+
+      - record: env:adpulse_cache_hit:ratio_rate1m
+        expr: |
+          sum by (env) (rate(adpulse_cache_requests_total{result="hit"}[1m]))
+          / sum by (env) (rate(adpulse_cache_requests_total[1m]))
+
+      - record: env:adpulse_fallback:rate1m
+        expr: sum by (env) (rate(adpulse_fallback_total[1m]))
+
+      # ---- replicas
+      - record: env:adpulse_api_replicas_up:count
+        expr: count by (env) (up{job="api"} == 1)
+
+      # Minimum healthy replicas per env (the deploy runs 2; the healer may scale to 4).
+      - record: env:adpulse_api_replicas_expected:count
+        expr: |
+          label_replace(vector(2), "env", "staging", "", "")
+          or label_replace(vector(2), "env", "prod", "", "")

@@ -1,0 +1,169 @@
+# AdPulse alerts (plan Section 10). Every alert has severity, env, summary,
+# description and a runbook link. The healer maps alertname -> playbook
+# (healer/healing.yml, Phase 8).
+groups:
+  - name: adpulse-api
+    rules:
+      # Hung replica: still in DNS, but the scrape times out.
+      - alert: AdPulseApiReplicaDown
+        expr: up{job="api"} == 0
+        for: 15s
+        labels:
+          severity: critical
+          reason: unreachable
+        annotations:
+          summary: "API replica {{ $labels.instance }} in {{ $labels.env }} is down or hung"
+          description: "Prometheus cannot scrape {{ $labels.instance }} (scrape failed or timed out) for 15s."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/AdPulseApiReplicaDown.md
+
+      # Stopped/removed replica: it vanishes from DNS, so there is no up==0
+      # series; compare healthy replicas against the expected minimum instead.
+      - alert: AdPulseApiReplicaDown
+        expr: |
+          env:adpulse_api_replicas_expected:count
+          > on (env) (env:adpulse_api_replicas_up:count or env:adpulse_api_replicas_expected:count * 0)
+        for: 15s
+        labels:
+          severity: critical
+          reason: missing
+        annotations:
+          summary: "{{ $labels.env }} has fewer healthy API replicas than expected"
+          description: "Healthy replicas in {{ $labels.env }} are below the expected {{ $value }} for 15s (a replica is stopped or missing)."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/AdPulseApiReplicaDown.md
+
+      - alert: AdPulseHighErrorRate
+        expr: env:adpulse_http_5xx:ratio_rate1m > 0.05
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.env }}: {{ $value | humanizePercentage }} of /v1/ad requests fail"
+          description: "5xx ratio over 1m has been above 5% for 1m."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/AdPulseHighErrorRate.md
+
+      - alert: AdPulseHighLatencyP95
+        expr: env:adpulse_http_request_duration_seconds:p95_1m > 0.25
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.env }}: p95 latency {{ $value | humanizeDuration }}"
+          description: "p95 of /v1/ad has been above 250ms for 2m. Network or DB latency needs a human; the healer only collects diagnostics."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/AdPulseHighLatencyP95.md
+
+      - alert: AdPulseServingFallbackAds
+        expr: env:adpulse_fallback:rate1m > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.env }} is serving house (fallback) ads"
+          description: >-
+            Both cache and database lookups are failing for some requests ({{ $value | humanize }}/s).
+            Symptom alert; inhibited while AdPulseDatabaseDown fires.
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/AdPulseServingFallbackAds.md
+
+  - name: adpulse-data
+    rules:
+      - alert: AdPulseDatabaseDown
+        expr: pg_up == 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL in {{ $labels.env }} is down"
+          description: "postgres_exporter cannot connect to postgres-{{ $labels.env }} (pg_up == 0) for 15s."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/AdPulseDatabaseDown.md
+
+      - alert: AdPulseCacheDown
+        expr: redis_up == 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis in {{ $labels.env }} is down"
+          description: "redis_exporter cannot reach redis-{{ $labels.env }} (redis_up == 0) for 15s."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/AdPulseCacheDown.md
+
+      # Trend-based, proactive: fires BEFORE the quota is reached.
+      - alert: BackupQuotaWillFillSoon
+        expr: predict_linear(adpulse_backup_dir_bytes[10m], 3600) > on (env) adpulse_backup_quota_bytes
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.env }}: backup directory will exceed its quota within 1h"
+          description: "At the current growth rate (last 10m) the backup directory reaches {{ $value | humanize1024 }}B within an hour, above the quota."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/BackupQuotaWillFillSoon.md
+
+      # 3 x the 300s backup interval.
+      - alert: BackupStale
+        expr: time() - adpulse_backup_last_success_timestamp_seconds > 3 * 300
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.env }}: last successful backup was {{ $value | humanizeDuration }} ago"
+          description: "No successful backup for more than 3 backup intervals."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/BackupStale.md
+
+  - name: adpulse-host
+    rules:
+      - alert: HostHighCPU
+        expr: 1 - avg by (env) (rate(node_cpu_seconds_total{job="node", mode="idle"}[1m])) > 0.85
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host CPU is {{ $value | humanizePercentage }} busy"
+          description: "Average CPU busy across all cores has been above 85% for 1m (noisy neighbour?)."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/HostHighCPU.md
+
+      - alert: ApiContainerHighCPU
+        expr: |
+          sum by (env, container) (rate(container_cpu_usage_seconds_total{job="cadvisor", role="api"}[1m]))
+          / on (env, container) (max by (env, container) (container_spec_cpu_quota{job="cadvisor", role="api"})
+                                 / max by (env, container) (container_spec_cpu_period{job="cadvisor", role="api"}))
+          > 0.9
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.container }} uses {{ $value | humanizePercentage }} of its CPU limit"
+          description: "API container CPU above 90% of its limit for 1m."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/ApiContainerHighCPU.md
+
+      - alert: ApiContainerMemoryHigh
+        expr: |
+          max by (env, container) (container_memory_working_set_bytes{job="cadvisor", role="api"})
+          / on (env, container) max by (env, container) (container_spec_memory_limit_bytes{job="cadvisor", role="api"} > 0)
+          > 0.9
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.container }} uses {{ $value | humanizePercentage }} of its memory limit"
+          description: "API container memory (working set) above 90% of its limit for 30s (leak?)."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/ApiContainerMemoryHigh.md
+
+  - name: adpulse-platform
+    rules:
+      - alert: HealerEscalated
+        expr: increase(adpulse_heal_escalations_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "The healer gave up on {{ $labels.alert }} in {{ $labels.env }}"
+          description: "Automatic remediation failed or ran out of attempts. A human must act."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/HealerEscalated.md
+
+      - alert: TargetMissing
+        expr: up{job!="api"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Scrape target {{ $labels.job }}/{{ $labels.instance }} is down"
+          description: "Prometheus has not been able to scrape {{ $labels.instance }} for 1m; its metrics (and alerts based on them) are blind."
+          runbook: https://github.com/jugalkkt/adpulse/blob/main/docs/runbooks/TargetMissing.md

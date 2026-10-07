@@ -92,6 +92,8 @@ async def run() -> None:
 
 def main() -> None:
     setup_logging(os.environ.get("APP_ENV", "dev"), os.environ.get("LOG_LEVEL", "INFO"))
+    # httpx logs every request at INFO (15-25 lines/s); the 30s summary is enough.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     asyncio.run(run())
 
 

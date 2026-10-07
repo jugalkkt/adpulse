@@ -260,7 +260,7 @@ resource "docker_container" "cadvisor" {
     "--docker_only=true",
     "--housekeeping_interval=10s",
     "--store_container_labels=false",
-    "--whitelisted_container_labels=com.adpulse.project,com.adpulse.env,com.adpulse.role",
+    "--whitelisted_container_labels=com.adpulse.project,com.adpulse.env,com.adpulse.role,com.adpulse.replica",
     "--disable_metrics=advtcp,cpu_topology,cpuset,hugetlb,memory_numa,percpu,referenced_memory,resctrl,sched,tcp,udp,process",
   ]
   capabilities {
