@@ -1,0 +1,1 @@
+Latency on Redis AND Postgres. The healer collected evidence; the human step removed the toxics at T+172 s.

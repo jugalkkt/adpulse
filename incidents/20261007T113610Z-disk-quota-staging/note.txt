@@ -1,0 +1,1 @@
+Remediated at T+150 s; MTTR is when the 10 m forecast cleared.

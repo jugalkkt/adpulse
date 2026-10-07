@@ -1,0 +1,1 @@
+Also caused a false HealerEscalated (second alert variant); fixed in restart_api.

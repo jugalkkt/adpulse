@@ -1,0 +1,86 @@
+{
+  "id": "20261007T120317Z-cache-down-prod",
+  "scenario": "cache-down",
+  "layer": "database (cache)",
+  "env": "prod",
+  "description": "docker stop redis-<env>",
+  "expected_alert": "AdPulseCacheDown",
+  "expected_heal": "restart_cache",
+  "human_stop": false,
+  "events": [
+    {
+      "event": "injected",
+      "ts": "2026-10-07T12:03:22.863Z",
+      "t_plus_s": 0.0
+    },
+    {
+      "event": "alert_firing",
+      "ts": "2026-10-07T12:03:38.887Z",
+      "t_plus_s": 16.0
+    },
+    {
+      "event": "heal_started",
+      "ts": "2026-10-07T12:03:48.237Z",
+      "t_plus_s": 25.4
+    },
+    {
+      "event": "recovered",
+      "ts": "2026-10-07T12:03:57.260Z",
+      "t_plus_s": 34.4
+    },
+    {
+      "event": "injection_removed",
+      "ts": "2026-10-07T12:03:57.277Z",
+      "t_plus_s": 34.4
+    },
+    {
+      "event": "heal_finished",
+      "ts": "2026-10-07T12:03:59.127Z",
+      "t_plus_s": 36.3
+    },
+    {
+      "event": "alert_resolved",
+      "ts": "2026-10-07T12:04:00.283Z",
+      "t_plus_s": 37.4
+    }
+  ],
+  "other_alerts": [
+    {
+      "alertname": "AdPulseServingFallbackAds",
+      "first_seen": "2026-10-07T12:03:40.928Z",
+      "t_plus_s": 18.1
+    }
+  ],
+  "mttd_s": 16.0,
+  "mttr_s": 34.4,
+  "heal": [
+    {
+      "ts": "2026-10-07T12:03:59.127+00:00",
+      "alertname": "AdPulseCacheDown",
+      "env": "prod",
+      "fingerprint": "fb817601b039e515",
+      "action": "restart_cache",
+      "trigger": "firing",
+      "attempt": 1,
+      "result": "success",
+      "duration_s": 10.89,
+      "extra_vars": {
+        "env": "prod",
+        "alertname": "AdPulseCacheDown"
+      },
+      "stdout_tail": "*************\nskipping: [localhost]\n\nTASK [Restart or start | redis-prod] *******************************************\nchanged: [localhost]\n\nTASK [Wait for healthy | redis-prod] *******************************************\nFAILED - RETRYING: [localhost]: Wait for healthy | redis-prod (29 retries left).\nFAILED - RETRYING: [localhost]: Wait for healthy | redis-prod (28 retries left).\nok: [localhost]\n\nPLAY RECAP *********************************************************************\nlocalhost                  : ok=4    changed=1    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   \n\n"
+    }
+  ],
+  "probes": {
+    "interval_s": 1,
+    "total": 37,
+    "failed_non_200": 0,
+    "fallback": 0,
+    "slow_over_250ms": 0,
+    "max_latency_s": 0.0591
+  },
+  "window": {
+    "start": "2026-10-07T12:03:22.863Z",
+    "end": "2026-10-07T12:04:00.283Z"
+  }
+}

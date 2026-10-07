@@ -10,7 +10,8 @@
 - **Phase 6: DONE** (2026-10-07). DoD passed. Both envs run release `0b5f3a9` with 2 healthy replicas each.
 - **Phase 7: DONE** (2026-10-07). DoD passed. Both envs on release `7a6904c`.
 - **Phase 8: DONE** (2026-10-07). DoD passed. The healer is live (dry-run off).
-- **Phase 9:** next (chaos, MTTD/MTTR, RCAs). The laptop must stay awake and on Ethernet.
+- **Phase 9: DONE** (2026-10-07). DoD passed. 13 chaos runs (10 scenarios in staging, a db-down re-run, a 2-run prod game day), each with an RCA. deploy-bad-release follows in Phase 10.
+- **Phase 10:** next (CI/CD). Starts with 🛑 Q5 (self-hosted runner) and Q6 (approval method).
 
 ## Phase 0: Preflight
 
@@ -258,6 +259,47 @@ Raw logs of the failed attempts are kept in `incidents/raw/` (gitignored).
 - Escalation: a webhook for a non-existent replica IP → playbook failed → escalated → **HealerEscalated firing 10s later** (alert=AdPulseApiReplicaDown, env=staging).
 - Socket proxy: the healer can list/restart containers and is denied volumes (403).
 - `make test-rules`: SUCCESS (5 tests). `make lint-ansible`: production profile, 0 failures.
+
+## Phase 9: Chaos, MTTD/MTTR, RCAs
+
+### Built (2026-10-07)
+- `chaos/chaos.py`: list / run / stop; 10 scenarios (the plan's 9, plus net-latency-datapath, D051); probes, timeline, MTTD/MTTR; injection verification; prod guard (D053).
+- `docker/chaos-stress/Dockerfile` (stress-ng 0.17.06). App: chaos `memory_leak` gets `max_mb` (D052, +1 test, 34 app tests).
+- `tools/rca.py`: RCA skeleton with auto-filled Impact, Timeline, Detection, Resolution and Evidence (query_range); persisted `evidence.json`; `--summary` (D054). `docs/rca/TEMPLATE.md`.
+- Make: `chaos`, `chaos-list`, `chaos-stop`, `rca`, `rca-summary`.
+- 13 RCAs in `docs/rca/` with hand-written narratives (every number from data; unmeasured statements marked as inferred). `docs/rca/SUMMARY.md`.
+
+### Questions asked
+- net-latency: Redis-only latency cannot trip the p95 alert (pre-measured p95 210 ms). Jugal chose to run both variants (D051).
+
+### Real problems found by the experiments, and fixed
+1. **db-down not healed for 10 minutes:** a slow DNS failure for the stopped container → exporter scrape timeouts → the alert flapped → never delivered. Fixed with keep_firing_for (D049) and fast-fail exporter DNS (D050). Re-run: MTTR 37.5 s. Prod game day: 40.4 s.
+2. **False escalation in api-hang:** two alert variants for one hang, and the second restart_api found nothing to do → failure → HealerEscalated. Fixed: no-op success when replicas are healthy (+ test-heal case, 12/12).
+3. Chaos/RCA tool bugs: premature "recovered" (api-hang), a stressor that never ran (cpu-hog, read-only rootfs), missing heal events, an evidence window counting the neighbouring incident. Invalid runs kept in `incidents/raw/` (gitignored) and re-run.
+4. Findings recorded as action items, not fixed: no cache-error-ratio alert (net-latency undetected); stale-if-error caching; trend-alert `for` too long (disk-quota fired ~13 s before the quota); lower nginx read timeout.
+
+### Results (from docs/rca/SUMMARY.md)
+| Scenario | Env | MTTD | MTTR | User impact |
+|---|---|---|---|---|
+| replica-down | staging | 20.6 s | 42.7 s | 0 failed, 2 slow of 46 probes |
+| cache-down | staging | 24.0 s | 43.5 s | none |
+| db-down (1st) | staging | 22.0 s | n/a (not healed) | 94.2% house ads for 10 min |
+| db-down (re-run) | staging | 18.0 s | 37.5 s | 3.9% house ads (API-side) |
+| api-hang | staging | 24.3 s | 56.1 s | 12 of 47 probes slow (≤2.0 s) |
+| mem-leak | staging | 62.2 s | 88.0 s | none |
+| error-burst | staging | 74.4 s | 105.5 s | 52 of 108 probes failed (500) |
+| disk-quota | staging | 137.3 s | 353.0 s (remediated at 150 s) | none |
+| net-latency (Redis) | staging | not detected | n/a | none visible; 4,842 cache errors |
+| net-latency-datapath | staging | 134.2 s | 175.4 s | 145 of 152 probes house ads |
+| cpu-hog | staging | 106.3 s | 137.6 s | none |
+| db-down | prod | 22.1 s | 40.4 s | 24.5% house ads (API-side) |
+| cache-down | prod | 16.0 s | 34.4 s | none |
+
+### Phase 9 DoD (2026-10-07)
+- Every scenario has an RCA (13 files, no TODOs left); SUMMARY.md complete.
+- `chaos.py stop` on staging and prod: "leftover faults: none"; 0 role=chaos containers; 0 junk files.
+- All alerts resolved afterwards (Alertmanager: 0 active); smoke PASS in both envs.
+- The prod guard refused a run without --confirm-prod.
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.
