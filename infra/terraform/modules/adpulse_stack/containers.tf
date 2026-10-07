@@ -124,6 +124,11 @@ resource "docker_container" "toxiproxy" {
   read_only     = false
   security_opts = local.security_opts
   command       = ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+  # Docker's embedded DNS forwards names it doesn't know upstream; for a STOPPED
+  # container's name that took ~5.2s here, so scrapes timed out and the outage
+  # alert flapped (incident 2026-10-07 db-down, DECISIONS D050). These containers
+  # only ever resolve Docker names: a dead upstream makes "no such host" instant.
+  dns = ["127.0.0.1"]
   capabilities {
     drop = ["ALL"]
   }
@@ -274,6 +279,11 @@ resource "docker_container" "postgres_exporter" {
     "DATA_SOURCE_USER=adpulse_monitor",
     "DATA_SOURCE_PASS=${var.secrets.db_monitor_password}",
   ]
+  # Docker's embedded DNS forwards names it doesn't know upstream; for a STOPPED
+  # container's name that took ~5.2s here, so scrapes timed out and the outage
+  # alert flapped (incident 2026-10-07 db-down, DECISIONS D050). These containers
+  # only ever resolve Docker names: a dead upstream makes "no such host" instant.
+  dns = ["127.0.0.1"]
   capabilities {
     drop = ["ALL"]
   }
@@ -311,6 +321,11 @@ resource "docker_container" "redis_exporter" {
     # so redis_up==0 was never seen and AdPulseCacheDown could not fire.
     "REDIS_EXPORTER_CONNECTION_TIMEOUT=1s",
   ]
+  # Docker's embedded DNS forwards names it doesn't know upstream; for a STOPPED
+  # container's name that took ~5.2s here, so scrapes timed out and the outage
+  # alert flapped (incident 2026-10-07 db-down, DECISIONS D050). These containers
+  # only ever resolve Docker names: a dead upstream makes "no such host" instant.
+  dns = ["127.0.0.1"]
   capabilities {
     drop = ["ALL"]
   }
