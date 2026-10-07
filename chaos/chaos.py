@@ -96,6 +96,18 @@ def api_replicas(env: str) -> list[str]:
     return sorted(n for n in out.split() if n.startswith(f"api-{env}-") and n.rsplit("-", 1)[1].isdigit())
 
 
+def replica_ok(name: str) -> bool:
+    """Docker health lags (3 failed checks); also require /healthz to answer within 2s right now."""
+    if container_health(name) != "running/healthy":
+        return False
+    r = subprocess.run(  # noqa: S603
+        ["docker", "exec", name, "curl", "-sf", "-m", "2", "-o", "/dev/null", "http://127.0.0.1:8000/healthz"],  # noqa: S607
+        capture_output=True,
+        timeout=10,
+    )
+    return r.returncode == 0
+
+
 def chaos_api(container: str, method: str, path: str) -> str:
     """Call the replica's chaos endpoint from inside the container (it is not exposed via nginx)."""
     token = env_file_value("CHAOS_TOKEN")
@@ -215,7 +227,7 @@ class ReplicaDown(Scenario):
             sh("docker", "start", f"api-{self.env}-1", check=False)
 
     def healthy(self):
-        return all(container_health(r) == "running/healthy" for r in api_replicas(self.env))
+        return all(replica_ok(r) for r in api_replicas(self.env))
 
 
 class ApiHang(Scenario):
@@ -232,7 +244,7 @@ class ApiHang(Scenario):
             chaos_api(r, "DELETE", "/admin/chaos")
 
     def healthy(self):
-        return all(container_health(r) == "running/healthy" for r in api_replicas(self.env))
+        return all(replica_ok(r) for r in api_replicas(self.env))
 
 
 class MemLeak(Scenario):
@@ -256,7 +268,7 @@ class MemLeak(Scenario):
             f'max(container_memory_working_set_bytes{{role="api", container="api-{self.env}-1"}})'
             f' / max(container_spec_memory_limit_bytes{{role="api", container="api-{self.env}-1"}})'
         )
-        return container_health(f"api-{self.env}-1") == "running/healthy" and mem is not None and mem < 0.5
+        return replica_ok(f"api-{self.env}-1") and mem is not None and mem < 0.5
 
 
 class ErrorBurst(Scenario):
@@ -276,7 +288,7 @@ class ErrorBurst(Scenario):
     def healthy(self):
         for r in api_replicas(self.env):
             state = chaos_api(r, "GET", "/admin/chaos")
-            if '"error_rate"' in state or container_health(r) != "running/healthy":
+            if '"error_rate"' in state or not replica_ok(r):
                 return False
         return True
 
@@ -588,12 +600,21 @@ def run(scenario_name: str, env: str, duration: float, confirm_prod: bool) -> Pa
         time.sleep(3)
         probe.stop()
 
-    # wait (bounded) for the alert to resolve, for the record
-    resolve_deadline = now() + 120
+    # The healer logs an action only after its playbook finishes (it waits for
+    # health itself), which can be after "recovered". Keep reading the heal log
+    # while waiting (bounded) for the alert to resolve, and take the heal events
+    # from the log's own timestamps.
+    resolve_deadline = now() + 150
     while now() < resolve_deadline:
+        heals = heal_entries_since(events["injected"], env, sc.expected_alert)
+        if heals and "heal_finished" not in events:
+            h = heals[0]
+            mark("heal_started", h["_t"] - float(h.get("duration_s") or 0))
+            mark("heal_finished", h["_t"])
         if not any(a["labels"]["alertname"] == sc.expected_alert for a in active_alerts(env)):
             mark("alert_resolved")
-            break
+            if "heal_finished" in events or "alert_firing" not in events or now() > events["alert_resolved"] + 20:
+                break
         time.sleep(2)
 
     inj = events["injected"]

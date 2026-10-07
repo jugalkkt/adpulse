@@ -47,18 +47,23 @@ def prom_instant(query: str, at: float) -> float | None:
 
 def evidence(tl: dict) -> dict:
     env = tl["env"]
-    start = ts(tl["window"]["start"]) - 60
-    end = ts(tl["window"]["end"]) + 60
+    # Exactly injection -> alert resolved: chaos runs are back-to-back, and any
+    # padding counted the neighbouring incident's errors (found in practice).
+    start = ts(tl["window"]["start"])
+    end = ts(tl["window"]["end"])
     window_s = int(end - start)
     q = {
         "peak_5xx_ratio": f'env:adpulse_http_5xx:ratio_rate1m{{env="{env}"}}',
         "peak_p95_s": f'env:adpulse_http_request_duration_seconds:p95_1m{{env="{env}"}}',
-        "requests": f'sum(increase(adpulse_http_requests_total{{env="{env}", route="/v1/ad"}}[{window_s}s]))',
+        "requests": f'sum(increase(adpulse_http_requests_total{{env="{env}", route="/v1/ad"}}[{window_s}s])) or vector(0)',
         "requests_5xx": (
             f'sum(increase(adpulse_http_requests_total{{env="{env}", route="/v1/ad", status=~"5.."}}[{window_s}s]))'
+            " or vector(0)"
         ),
-        "fallback_ads": f'sum(increase(adpulse_fallback_total{{env="{env}"}}[{window_s}s]))',
-        "cache_errors": f'sum(increase(adpulse_cache_requests_total{{env="{env}", result="error"}}[{window_s}s]))',
+        "fallback_ads": f'sum(increase(adpulse_fallback_total{{env="{env}"}}[{window_s}s])) or vector(0)',
+        "cache_errors": (
+            f'sum(increase(adpulse_cache_requests_total{{env="{env}", result="error"}}[{window_s}s])) or vector(0)'
+        ),
     }
     out = {"window": {"start": start, "end": end}, "queries": q, "values": {}}
     for key in ("peak_5xx_ratio", "peak_p95_s"):
@@ -78,8 +83,8 @@ def fmt(v, unit="", digits=3):
 
 
 def rca_path(tl: dict) -> Path:
-    date = tl["id"][:8]
-    return RCA_DIR / f"{date[:4]}-{date[4:6]}-{date[6:8]}-{tl['scenario']}-{tl['env']}.md"
+    d = tl["id"]  # 20261007T105809Z-...
+    return RCA_DIR / f"{d[:4]}-{d[4:6]}-{d[6:8]}-{d[9:13]}-{tl['scenario']}-{tl['env']}.md"
 
 
 def render(tl: dict, ev: dict, incident_dir: Path) -> str:
@@ -165,7 +170,7 @@ def render(tl: dict, ev: dict, incident_dir: Path) -> str:
         "",
         "## Evidence",
         f"Window: {datetime.fromtimestamp(ev['window']['start'], UTC):%H:%M:%S}–"
-        f"{datetime.fromtimestamp(ev['window']['end'], UTC):%H:%M:%S} UTC (incident ±60 s).",
+        f"{datetime.fromtimestamp(ev['window']['end'], UTC):%H:%M:%S} UTC (injection → alert resolved).",
         "",
         "| Value | Result | PromQL |",
         "|---|---|---|",
