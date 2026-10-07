@@ -7,6 +7,7 @@
     - name: List scaled-out replicas
       community.docker.docker_host_info:
         containers: true
+        verbose_output: true  # full entries: Labels, State, NetworkSettings
         containers_all: true
         containers_filters:
           label:
