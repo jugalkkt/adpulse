@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: adpulse
+    folder: AdPulse
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /etc/adpulse-dashboards

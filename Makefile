@@ -13,7 +13,7 @@ define todo
 	@echo "make $@: not implemented yet ($(1))" >&2; exit 1
 endef
 
-.PHONY: help check secrets build build-base build-api build-postgres lock lint lint-puppet lint-chef lint-app tools-puppet test test-postgres scan infra monitoring deploy rollback status \
+.PHONY: check-env plan-infra plan-monitoring lint-terraform help check secrets build build-base build-api build-postgres lock lint lint-puppet lint-chef lint-app tools-puppet test test-postgres scan infra monitoring deploy rollback status \
         up down chaos chaos-stop rca aws-plan aws-up aws-bootstrap aws-deploy aws-down urls
 
 help: ## List targets
@@ -47,7 +47,7 @@ lock: ## Re-lock Python dependencies with hashes (app/requirements*.in -> .txt)
 	  for f in requirements requirements-dev; do \
 	    /tmp/v/bin/pip-compile -q --generate-hashes --allow-unsafe --strip-extras --no-header -o $$f.txt $$f.in; done'
 
-lint: lint-puppet lint-chef lint-app ## Run all linters
+lint: lint-puppet lint-chef lint-app lint-terraform ## Run all linters
 
 CINC_WORKSTATION := cincproject/workstation:26.3.0@sha256:b19f9949b1012e5a9cd93b68ee1d00b705fc66e1d47f4283471cddf293500830
 
@@ -81,11 +81,25 @@ test: ## Unit + integration tests (throwaway Postgres/Redis via compose)
 scan: ## Trivy image/config scans and gitleaks
 	$(call todo,Phase 11)
 
-infra: ## Terraform apply for ENV=staging|prod
-	$(call todo,Phase 5)
+check-env:
+	@case "$(ENV)" in staging|prod) ;; *) echo "ENV must be staging or prod (got '$(ENV)')" >&2; exit 1;; esac
+
+infra: check-env ## Terraform apply for ENV=staging|prod (images for TAG must be built)
+	bash scripts/terraform.sh env $(ENV) apply -input=false -auto-approve -var-file=$(ENV).tfvars -var image_tag=$(TAG)
+
+plan-infra: check-env ## Terraform plan for ENV=staging|prod
+	bash scripts/terraform.sh env $(ENV) plan -input=false -var-file=$(ENV).tfvars -var image_tag=$(TAG)
 
 monitoring: ## Terraform apply for the monitoring stack
-	$(call todo,Phase 5)
+	bash scripts/terraform.sh monitoring apply -input=false -auto-approve
+
+plan-monitoring: ## Terraform plan for the monitoring stack
+	bash scripts/terraform.sh monitoring plan -input=false
+
+lint-terraform: ## terraform fmt -check and validate in every root
+	terraform fmt -check -recursive infra/terraform
+	@for d in infra/terraform/envs/local infra/terraform/monitoring/local; do \
+	  terraform -chdir=$$d init -input=false -backend=false >/dev/null && TF_WORKSPACE=staging terraform -chdir=$$d validate -no-color || exit 1; done
 
 deploy: ## Ansible rolling deploy: ENV=staging|prod TAG=<sha>
 	$(call todo,Phase 6)
@@ -100,7 +114,11 @@ up: ## From zero to everything running (both envs + monitoring)
 	$(call todo,Phase 6-8)
 
 down: ## Destroy local stacks (asks first; label-scoped)
-	$(call todo,Phase 5)
+	@read -r -p "Destroy local staging, prod and monitoring stacks (data volumes included)? Type yes: " a; [ "$$a" = yes ] || { echo aborted; exit 1; }
+	-docker ps -aq --filter label=com.adpulse.project=adpulse --filter label=com.adpulse.role=api | xargs -r docker rm -f
+	bash scripts/terraform.sh env staging destroy -input=false -auto-approve -var-file=staging.tfvars -var image_tag=$(TAG)
+	bash scripts/terraform.sh env prod destroy -input=false -auto-approve -var-file=prod.tfvars -var image_tag=$(TAG)
+	bash scripts/terraform.sh monitoring destroy -input=false -auto-approve
 
 chaos: ## Run one chaos scenario: SCENARIO=<name> ENV=staging
 	$(call todo,Phase 9)

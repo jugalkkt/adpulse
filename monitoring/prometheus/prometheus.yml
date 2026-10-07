@@ -1,0 +1,10 @@
+# Phase 5 bootstrap config: self-scrape only. Phase 7 replaces this with the
+# full scrape config, rules, SLOs and the Alertmanager connection.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
