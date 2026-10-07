@@ -233,3 +233,54 @@ Starlette 1.7 warns that `httpx` with its TestClient is deprecated in favour of 
 - **Date:** 2026-10-07
 - **Decision:** `make lint-ansible` sets `ANSIBLE_COLLECTIONS_PATH` to the `ansible` pipx venv's site-packages. The lint passes the strictest `production` profile with 0 skips.
 - **Why:** ansible-lint is its own pipx app with only ansible-core, so `community.docker` modules were "unknown". The `requests` library was injected into the ansible venv (`pipx inject ansible requests==2.34.2`), which the community.docker modules need.
+
+### D035: 5s scrape and evaluation intervals (demo setting)
+- **Date:** 2026-10-07
+- **Decision:** `scrape_interval` and `evaluation_interval` are 5s (cAdvisor 10s); `scrape_timeout` is 4s.
+- **Why:** Chaos experiments must show up in seconds, and MTTD is measured. Production would use 15–30s to keep storage and CPU cost reasonable.
+- **Alternatives:** 15s (MTTD would be dominated by scrape lag).
+
+### D036: SLO windows and the "6h" error budget
+- **Date:** 2026-10-07
+- **Decision:** Standard multi-window burn rates (fast 1h and 5m at 14.4×, slow 6h and 30m at 6×) against a notional 30-day SLO. "Error budget remaining" on the dashboard is computed over the last 6h.
+- **Why:** The lab runs for hours, not 30 days, so a 30-day budget would never move. The windows are the plan's; they need time to fill, so burn alerts only mean something after about 1h of traffic.
+- **Alternatives:** Shrink every window ×30 (5m becomes 10s, which is noise at 15–25 rps).
+
+### D037: Grafana dashboards are generated, with a validated palette
+- **Date:** 2026-10-07
+- **Decision:**
+  - `monitoring/grafana/build_dashboards.py` writes the 5 dashboard JSON files (`make dashboards`).
+  - Series colours are fixed per entity from a validated palette. The first 3 categorical slots (blue `#3987e5`, orange `#d95926`, aqua `#199e70`) passed every check of the dataviz validator in both light and dark mode, including worst-adjacent CVD ΔE 9.4.
+  - Status colours appear only on thresholds. There is one y-axis per chart, legends only for 2+ series, and stat tiles for headline numbers.
+  - `scripts/check_dashboards.py` (`make check-dashboards`) runs every panel query against Prometheus and fails on unexpected empty panels.
+- **Why:** No click-ops (the plan's requirement); reviewable diffs; colour that stays readable for colour-blind viewers; an automated "loads with data" check.
+- **Limitation:** A Grafana fixed colour can't switch with the theme, so the dark-surface steps are used. They also passed against the light surface.
+
+### D038: DB pool `reconnect_timeout` 10s
+- **Date:** 2026-10-07
+- **Decision:** `DB_RECONNECT_TIMEOUT_SECONDS=10` (psycopg_pool default: 300).
+- **Why:** psycopg_pool retries with unbounded doubling (1, 2, 4 … 64 s) until the timeout. Measured: after a ~100 s Postgres outage the API needed **45 s** to become ready after the DB was back. With 10s the retry chain restarts on the next waiting request. Measured after the change: a 100 s outage, then readyz 200 just **1.5 s** after Postgres was ready.
+- **Alternatives:** Patch the backoff constants (private API).
+
+### D039: Exporter connect timeouts
+- **Date:** 2026-10-07
+- **Decision:** `REDIS_EXPORTER_CONNECTION_TIMEOUT=2s`; `connect_timeout=2` in postgres_exporter's DSN.
+- **Why:** The first real alert test showed `AdPulseCacheDown` **never fired**. With Redis stopped, an exporter scrape took 9.5s, longer than the 4s scrape timeout, so Prometheus saw the target down (TargetMissing) and never `redis_up == 0`. After the fix, down-scrapes take 0.44s (Redis) and 1.24s (Postgres), and the alerts reach the webhook 27s and 30s after the stop.
+
+### D040: Two rules for AdPulseApiReplicaDown; stable container names
+- **Date:** 2026-10-07
+- **Decision:**
+  - `reason=unreachable`: `up{job="api"} == 0` (hung replica).
+  - `reason=missing`: healthy count below the expected 2 (stopped replica).
+  - Prometheus also rebuilds cAdvisor's `container` label as `api-<env>-<com.adpulse.replica>`.
+- **Why:** With DNS service discovery, a stopped container leaves DNS, so it produces no `up == 0` series at all (promtool test: a stale marker means nothing fires without the second rule). cAdvisor keeps the name a container had at start, so renamed rolling-update containers showed as `api-<env>-N-next`; alerts would then point the healer at a container that doesn't exist.
+
+### D041: The healer scrape job arrives with the healer
+- **Date:** 2026-10-07
+- **Decision:** `prometheus.yml` gets the `healer` job in Phase 8, not Phase 7.
+- **Why:** Scraping a service that isn't deployed would fire TargetMissing permanently.
+
+### D042: Repo-root `ruff.toml`
+- **Date:** 2026-10-07
+- **Decision:** Python outside `app/` uses a root `ruff.toml` with the same style (line length 120).
+- **Why:** Otherwise the pre-commit ruff hooks used defaults (line length 88) for scripts and blocked commits.

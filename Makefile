@@ -18,7 +18,7 @@ define todo
 	@echo "make $@: not implemented yet ($(1))" >&2; exit 1
 endef
 
-.PHONY: lint-monitoring test-rules reload-monitoring migrate smoke lint-ansible check-env plan-infra plan-monitoring lint-terraform help check secrets build build-base build-api build-postgres lock lint lint-puppet lint-chef lint-app tools-puppet test test-postgres scan infra monitoring deploy rollback status \
+.PHONY: dashboards check-dashboards lint-monitoring test-rules reload-monitoring migrate smoke lint-ansible check-env plan-infra plan-monitoring lint-terraform help check secrets build build-base build-api build-postgres lock lint lint-puppet lint-chef lint-app tools-puppet test test-postgres scan infra monitoring deploy rollback status \
         up down chaos chaos-stop rca aws-plan aws-up aws-bootstrap aws-deploy aws-down urls
 
 help: ## List targets
@@ -85,6 +85,13 @@ lint-monitoring: ## promtool check config/rules + amtool check-config
 test-rules: ## promtool unit tests for alert rules
 	docker run --rm --network none -v "$(CURDIR)/monitoring/prometheus:/etc/prometheus:ro" -w /etc/prometheus/tests --entrypoint promtool $(PROM_IMAGE) test rules alerts_test.yml
 
+dashboards: ## Regenerate Grafana dashboard JSON from monitoring/grafana/build_dashboards.py
+	python3 monitoring/grafana/build_dashboards.py
+
+check-dashboards: ## Run every dashboard panel query against Prometheus (both envs)
+	/usr/bin/python3 scripts/check_dashboards.py --env staging
+	/usr/bin/python3 scripts/check_dashboards.py --env prod | tail -1
+
 reload-monitoring: ## Hot-reload Prometheus and Alertmanager config
 	@curl -fsS -X POST http://127.0.0.1:9090/-/reload && echo "prometheus reloaded"
 	@curl -fsS -X POST http://127.0.0.1:9093/-/reload && echo "alertmanager reloaded"
@@ -96,6 +103,7 @@ test: ## Unit + integration tests (throwaway Postgres/Redis via compose)
 	TAG=$(TAG) docker compose -f app/tests/compose.test.yml up -d --wait postgres redis
 	rc=0; TAG=$(TAG) docker compose -f app/tests/compose.test.yml run --rm tests || rc=$$?; \
 	  TAG=$(TAG) docker compose -f app/tests/compose.test.yml down -v --remove-orphans; exit $$rc
+	$(MAKE) --no-print-directory test-rules
 
 scan: ## Trivy image/config scans and gitleaks
 	$(call todo,Phase 11)
