@@ -1,0 +1,25 @@
+# On resolve of ApiContainerHighCPU: remove replicas the healer added
+# (label com.adpulse.scaled=true), keeping the deploy's baseline replicas.
+- name: Heal | scale API back in
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: List scaled-out replicas
+      community.docker.docker_host_info:
+        containers: true
+        containers_all: true
+        containers_filters:
+          label:
+            - com.adpulse.env={{ env }}
+            - com.adpulse.role=api
+            - com.adpulse.scaled=true
+      register: extra
+
+    - name: Remove them gracefully
+      community.docker.docker_container:
+        name: "{{ item.Names[0][1:] }}"
+        state: absent
+        stop_timeout: 15
+      loop: "{{ extra.containers }}"
+      loop_control:
+        label: "{{ item.Names[0][1:] }}"

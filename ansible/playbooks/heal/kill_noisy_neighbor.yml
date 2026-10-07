@@ -1,0 +1,57 @@
+# Heal host CPU saturation: stop the top CPU consumers, but ONLY containers
+# labelled com.adpulse.role=chaos or with no com.adpulse.project label.
+# Protected roles (db, api, cache, monitoring, healer, ...) are never touched.
+- name: Heal | stop noisy neighbours
+  hosts: localhost
+  gather_facts: false
+  vars:
+    cpu_threshold_pct: 20
+    max_to_stop: 3
+    protected_roles: [db, api, cache, lb, proxy, backup, exporter, loadgen, monitoring, healer]
+  tasks:
+    - name: Sample CPU of every running container
+      ansible.builtin.command: docker stats --no-stream --format '{{ "{{" }}json .{{ "}}" }}'
+      register: stats
+      changed_when: false
+
+    - name: Read container labels
+      community.docker.docker_host_info:
+        containers: true
+      register: host
+
+    - name: Rank eligible containers by CPU
+      ansible.builtin.set_fact:
+        ranked: >-
+          {%- set labels = {} -%}
+          {%- for c in host.containers -%}{%- set _ = labels.update({c.Names[0][1:]: c.Labels or {}}) -%}{%- endfor -%}
+          {%- set out = [] -%}
+          {%- for line in stats.stdout_lines -%}
+            {%- set s = line | from_json -%}
+            {%- set l = labels.get(s.Name, {}) -%}
+            {%- set cpu = s.CPUPerc | replace('%', '') | float -%}
+            {%- set eligible = (l.get('com.adpulse.role') == 'chaos' or 'com.adpulse.project' not in l)
+                               and l.get('com.adpulse.role') not in protected_roles -%}
+            {%- set _ = out.append({'name': s.Name, 'cpu': cpu, 'role': l.get('com.adpulse.role', '-'),
+                                    'project': l.get('com.adpulse.project', '-'), 'eligible': eligible}) -%}
+          {%- endfor -%}
+          {{ out | sort(attribute='cpu', reverse=true) }}
+
+    - name: Top CPU consumers (for the heal log)
+      ansible.builtin.debug:
+        msg: "{{ ranked[:8] }}"
+
+    - name: Pick containers to stop
+      ansible.builtin.set_fact:
+        victims: "{{ (ranked | selectattr('eligible') | selectattr('cpu', 'ge', cpu_threshold_pct | float) | list)[:max_to_stop] }}"
+
+    - name: Fail when no eligible noisy neighbour was found (a human must look)
+      ansible.builtin.fail:
+        msg: "Host CPU is high but no container labelled role=chaos or without a project label uses >= {{ cpu_threshold_pct }}% CPU."
+      when: victims | length == 0
+
+    - name: Stop the noisy neighbours
+      ansible.builtin.command: docker stop -t 5 {{ item.name }}
+      loop: "{{ victims }}"
+      loop_control:
+        label: "{{ item.name }} ({{ item.cpu }}% CPU, role={{ item.role }})"
+      changed_when: true

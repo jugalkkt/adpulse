@@ -6,7 +6,28 @@ variable "env_networks" {
 
 variable "enable_healer" {
   type    = bool
+  default = true
+}
+
+variable "image_tag" {
+  description = "Tag of the locally built adpulse-healer image (git short SHA)."
+  type        = string
+}
+
+variable "healer_dry_run" {
+  type    = bool
   default = false
+}
+
+variable "healer_uid" {
+  description = "Host uid that owns <repo>/incidents (set by scripts/terraform.sh)."
+  type        = number
+}
+
+variable "grafana_sa_token" {
+  type      = string
+  default   = ""
+  sensitive = true
 }
 
 variable "images" {

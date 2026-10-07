@@ -1,0 +1,69 @@
+# Heal CPU saturation: add one API replica (max 4), cloned from a running one
+# (same image, env, limits and network alias), so no secrets are needed here.
+- name: Heal | scale API out
+  hosts: localhost
+  gather_facts: false
+  vars:
+    max_replicas: 4
+  tasks:
+    - name: List running API replicas
+      community.docker.docker_host_info:
+        containers: true
+        containers_filters:
+          label:
+            - com.adpulse.env={{ env }}
+            - com.adpulse.role=api
+          status: running
+      register: api
+
+    - name: Count replicas
+      ansible.builtin.set_fact:
+        indexes: "{{ api.containers | map(attribute='Labels') | map(attribute='com.adpulse.replica', default='0') | map('int') | select('gt', 0) | list }}"
+
+    - name: Stop here when already at the maximum
+      ansible.builtin.meta: end_play
+      when: indexes | length >= max_replicas
+
+    - name: Name the new replica
+      ansible.builtin.set_fact:
+        new_name: "api-{{ env }}-{{ indexes | max + 1 }}"
+
+    - name: Inspect a template replica
+      community.docker.docker_container_info:
+        name: "api-{{ env }}-{{ indexes | min }}"
+      register: tmpl
+
+    - name: Build the env of the new replica from the template
+      ansible.builtin.set_fact:
+        new_env: "{{ new_env | default({}) | combine({item.split('=', 1)[0]: item.split('=', 1)[1]}) }}"
+      loop: "{{ tmpl.container.Config.Env | reject('match', '^(PATH|HOME|HOSTNAME|PYTHON|LANG|GPG)') | list }}"
+      no_log: true
+
+    - name: Start the new replica {{ new_name }}
+      community.docker.docker_container:
+        name: "{{ new_name }}"
+        image: "{{ tmpl.container.Config.Image }}"
+        pull: never
+        state: started
+        restart_policy: unless-stopped
+        read_only: true
+        tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+        security_opts: ["no-new-privileges:true"]
+        cap_drop: [ALL]
+        memory: "{{ tmpl.container.HostConfig.Memory }}"
+        memory_swap: "{{ tmpl.container.HostConfig.Memory }}"
+        cpus: "{{ tmpl.container.HostConfig.NanoCpus / 1000000000 }}"
+        networks:
+          - name: "adpulse-{{ env }}"
+            aliases: ["api-{{ env }}"]
+        labels: "{{ tmpl.container.Config.Labels | combine({'com.adpulse.replica': (indexes | max + 1) | string, 'com.adpulse.scaled': 'true'}) }}"
+        env: "{{ new_env }}"
+      no_log: true
+
+    - name: Wait for the new replica to be healthy
+      community.docker.docker_container_info:
+        name: "{{ new_name }}"
+      register: added
+      until: added.container.State.Health.Status | default('') == 'healthy'
+      retries: 30
+      delay: 2

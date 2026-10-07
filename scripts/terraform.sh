@@ -35,10 +35,14 @@ case "$kind" in
   monitoring)
     dir="$ROOT/infra/terraform/monitoring/local"
     TF_VAR_grafana_admin_password="$(envval GRAFANA_ADMIN_PASSWORD)"
+    # Optional until scripts/grafana_token.sh has created it.
+    TF_VAR_grafana_sa_token="$(grep -E '^GRAFANA_SA_TOKEN=' "$ENV_FILE" | tail -n1 | cut -d= -f2- || true)"
+    TF_VAR_healer_uid="$(id -u)"
+    mkdir -p "$ROOT/incidents"
     # Prometheus joins only env networks that already exist (DECISIONS D021).
     TF_VAR_env_networks="$(docker network ls --filter label=com.adpulse.project=adpulse --format '{{.Name}}' \
       | { grep -E '^adpulse-(staging|prod)$' || true; } | sort | /usr/bin/jq -R . | /usr/bin/jq -cs .)"
-    export TF_VAR_grafana_admin_password TF_VAR_env_networks
+    export TF_VAR_grafana_admin_password TF_VAR_env_networks TF_VAR_grafana_sa_token TF_VAR_healer_uid
     echo "monitoring: Prometheus joins env networks $TF_VAR_env_networks"
     terraform -chdir="$dir" init -input=false -upgrade=false >/dev/null
     ;;

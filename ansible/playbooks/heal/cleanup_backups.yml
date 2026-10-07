@@ -1,0 +1,43 @@
+# Heal backup quota pressure: delete files that are not real backups, keep
+# the newest N dumps, then delete oldest dumps until under quota.
+- name: Heal | clean up backups
+  hosts: localhost
+  gather_facts: false
+  vars:
+    retention: 6
+  tasks:
+    - name: Enforce retention and quota inside backup-agent-{{ env }}
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - backup-agent-{{ env }}
+          - bash
+          - -c
+          - |
+            set -euo pipefail
+            cd /backups
+            quota="${BACKUP_QUOTA_BYTES:-209715200}"
+            before=$(du -sb . | cut -f1)
+            junk=0; old=0; quota_rm=0
+            # 1. anything that is not <env>-<UTC timestamp>.dump (and not our state file)
+            for f in *; do
+              [ -f "$f" ] || continue
+              if [[ ! "$f" =~ ^{{ env }}-[0-9]{8}T[0-9]{6}Z\.dump$ ]]; then rm -f -- "$f"; junk=$((junk+1)); fi
+            done
+            # 2. retention
+            mapfile -t extra < <(ls -1t {{ env }}-*.dump 2>/dev/null | tail -n +{{ retention + 1 }})
+            for f in "${extra[@]}"; do rm -f -- "$f"; old=$((old+1)); done
+            # 3. quota (oldest first, always keep the newest)
+            while [ "$(du -sb . | cut -f1)" -gt "$quota" ] && [ "$(ls -1 {{ env }}-*.dump 2>/dev/null | wc -l)" -gt 1 ]; do
+              rm -f -- "$(ls -1tr {{ env }}-*.dump | head -n1)"; quota_rm=$((quota_rm+1))
+            done
+            after=$(du -sb . | cut -f1)
+            /usr/local/bin/adpulse-backup-metrics.sh
+            echo "{\"junk_removed\":$junk,\"retention_removed\":$old,\"quota_removed\":$quota_rm,\"bytes_before\":$before,\"bytes_after\":$after}"
+      register: cleanup
+      changed_when: true
+
+    - name: Result
+      ansible.builtin.debug:
+        msg: "{{ cleanup.stdout_lines | last }}"

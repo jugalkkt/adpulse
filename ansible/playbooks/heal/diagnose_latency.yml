@@ -1,0 +1,65 @@
+# Latency alert: collect evidence only (no automatic fix). Writes a snapshot
+# to /data/diagnostics/<UTC ts>-<env>/ (= incidents/diagnostics/ on the host).
+- name: Heal | diagnose latency
+  hosts: localhost
+  gather_facts: false
+  vars:
+    prometheus_url: "{{ lookup('ansible.builtin.env', 'PROMETHEUS_URL') | default('http://prometheus:9090', true) }}"
+    out_dir: "/data/diagnostics/{{ lookup('ansible.builtin.pipe', 'date -u +%Y%m%dT%H%M%SZ') }}-{{ env }}"
+    pg_activity_sql: >-
+      select pid, state, wait_event_type, wait_event, now() - query_start as running_for,
+      left(query, 80) as query from pg_stat_activity where datname = 'adpulse'
+    redis_info_cmd: >-
+      redis-cli -a "$(awk '/^requirepass/{print $2}' /tmp/redis.conf)" --no-auth-warning info stats
+    p95_query: 'env:adpulse_http_request_duration_seconds:p95_1m{env="{{ env }}"}'
+  tasks:
+    - name: Create the snapshot directory
+      ansible.builtin.file:
+        path: "{{ out_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Collect evidence
+      ansible.builtin.command:
+        argv: "{{ item.argv }}"
+      loop:
+        - {file: toxiproxy.txt, argv: [docker, exec, "toxiproxy-{{ env }}", /toxiproxy-cli, list]}
+        - {file: toxics-redis.txt, argv: [docker, exec, "toxiproxy-{{ env }}", /toxiproxy-cli, inspect, redis]}
+        - {file: toxics-postgres.txt, argv: [docker, exec, "toxiproxy-{{ env }}", /toxiproxy-cli, inspect, postgres]}
+        - {file: docker-stats.txt, argv: [docker, stats, --no-stream]}
+        - {file: pg_stat_activity.txt, argv: [docker, exec, -u, postgres, "postgres-{{ env }}", psql, -d, adpulse, -c, "{{ pg_activity_sql }}"]}
+        - {file: redis-info.txt, argv: [docker, exec, "redis-{{ env }}", sh, -c, "{{ redis_info_cmd }}"]}
+      loop_control:
+        label: "{{ item.file }}"
+      register: evidence
+      changed_when: false
+      failed_when: false
+
+    - name: Write evidence files
+      ansible.builtin.copy:
+        dest: "{{ out_dir }}/{{ item.item.file }}"
+        content: "{{ item.stdout | default('') }}\n{{ item.stderr | default('') }}\n"
+        mode: "0644"
+      loop: "{{ evidence.results }}"
+      loop_control:
+        label: "{{ item.item.file }}"
+
+    - name: Recent p95 (last 15 min, 15s steps)
+      vars:
+        now_s: "{{ lookup('ansible.builtin.pipe', 'date +%s') | int }}"
+      ansible.builtin.uri:
+        url: >-
+          {{ prometheus_url }}/api/v1/query_range?query={{ p95_query | urlencode }}&start={{ now_s | int - 900 }}&end={{ now_s }}&step=15
+        return_content: true
+      register: p95
+      failed_when: false
+
+    - name: Write p95 series
+      ansible.builtin.copy:
+        dest: "{{ out_dir }}/p95-last-15m.json"
+        content: "{{ p95.json | default({}) | to_nice_json }}\n"
+        mode: "0644"
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: "Diagnostics written to {{ out_dir }} (no automatic fix for latency; see docs/runbooks/AdPulseHighLatencyP95.md)"

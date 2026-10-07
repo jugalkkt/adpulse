@@ -9,7 +9,7 @@
 - **Phase 5: DONE** (2026-10-07). DoD passed. Local staging, prod and monitoring stacks are **running**.
 - **Phase 6: DONE** (2026-10-07). DoD passed. Both envs run release `0b5f3a9` with 2 healthy replicas each.
 - **Phase 7: DONE** (2026-10-07). DoD passed. Both envs on release `7a6904c`.
-- **Phase 8:** next (healer service).
+- **Phase 8:** IN PROGRESS (healer). Code, playbooks, Terraform and Make targets are written but not yet built or tested; see the Phase 8 section.
 
 ## Phase 0: Preflight
 
@@ -230,6 +230,22 @@ No chat webhook. Alerts go to the healer, the Alertmanager UI and Grafana.
   - Real alerts: stop redis-staging → AdPulseCacheDown at the webhook after **27s**, resolved sent after the restart.
   - Stop postgres-staging → AdPulseDatabaseDown after **30s**. The API kept serving HTTP 200 fallback ads. AdPulseServingFallbackAds was **suppressed by the inhibition rule**.
 - After the tests: 0 firing alerts.
+
+## Phase 8: Healer (in progress, 2026-10-07)
+
+### Written (not yet built or tested)
+- `healer/healer/engine.py`: decisions (run/ignore/escalate), dedupe by fingerprint, cooldown, max attempts per window, escalate once per window, playbook failure → escalate, dry-run, per-env lock, allow-listed playbook names.
+- `healer/healer/app.py`: POST /alertmanager, /healthz, /metrics; subprocess `ansible-playbook` with a 120s timeout; JSON heal log at /data/heal-log.jsonl (= incidents/); Grafana annotations (tags heal, env, alertname); metrics adpulse_heal_{actions_total,duration_seconds,escalations_total{alert,env,reason},in_progress,decisions_total}.
+- `healer/healing.yml`: the alert → playbook map (Section 10).
+- `healer/tests/test_engine.py`: 14 tests.
+- `ansible/playbooks/heal/`: restart_api, restart_db, restart_cache, scale_api, scale_down_api, kill_noisy_neighbor, cleanup_backups, diagnose_latency, tasks/restart_one, ansible.cfg. ansible-lint: production profile, 0 failures.
+- `docker/healer/Dockerfile`: FROM adpulse-base; docker-ce-cli 29.8.2 from Docker's repo (key fingerprint checked); hash-locked venv; community.docker 5.4.0 from Galaxy; non-root.
+- Terraform `modules/monitoring_stack/healer.tf`: internal network adpulse-healer-docker, docker-socket-proxy v0.5.0 (CONTAINERS, IMAGES, NETWORKS, EXEC, INFO, POST only; socket mounted read-only), healer (runs as the host uid so it can write incidents/, DOCKER_HOST=tcp://docker-socket-proxy:2375).
+- `scripts/grafana_token.sh`: service account adpulse-healer (Editor), token written to .env without printing.
+- Prometheus `healer` job. Make: build-healer, lock-healer, test-healer, grafana-token; `make test` runs test-healer; `make monitoring` passes image_tag and HEALER_DRY_RUN.
+
+### Blocker being worked on
+- `make lock-healer` (pip-compile --generate-hashes) is very slow on this network: it downloads every `cryptography` wheel at ~350 KB/s to hash it. The first attempt hung and was killed; the second is running verbosely (log in Claude's scratchpad). Next: build → test-healer → dry-run test → live test (`docker stop api-staging-1`).
 
 ## Open questions
 - FYI for Jugal (out of project scope): the OS is half-upgraded. os-release and kernel say 24.10, apt sources say 25.10, and ~2000 packages are not upgraded.

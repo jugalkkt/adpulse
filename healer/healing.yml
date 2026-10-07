@@ -1,0 +1,51 @@
+# Healer rules: which playbook (from ansible/playbooks/heal/) answers which
+# alert. Only playbooks named here can ever run (allow-list).
+#   extra_vars:    playbook variable <- alert label (missing labels are skipped)
+#   static_vars:   fixed playbook variables
+#   cooldown_seconds:       no new action for the same alert (fingerprint) within this time
+#   max_attempts / attempt_window_seconds: then escalate instead of acting
+#   on_resolved:   playbook to run when the alert resolves
+defaults:
+  cooldown_seconds: 120
+  max_attempts: 3
+  attempt_window_seconds: 900
+
+alerts:
+  AdPulseApiReplicaDown:
+    playbook: restart_api
+    extra_vars: {instance: instance, reason: reason}
+    cooldown_seconds: 30
+  AdPulseHighErrorRate:
+    playbook: restart_api
+    static_vars: {mode: rolling}
+    # Plan: escalate if it fires again within 10 minutes of a restart.
+    max_attempts: 1
+    attempt_window_seconds: 600
+  AdPulseHighLatencyP95:
+    playbook: diagnose_latency   # evidence only, no auto-fix
+    max_attempts: 1
+  AdPulseDatabaseDown:
+    playbook: restart_db
+    cooldown_seconds: 30
+  AdPulseCacheDown:
+    playbook: restart_cache
+    cooldown_seconds: 30
+  HostHighCPU:
+    playbook: kill_noisy_neighbor
+    cooldown_seconds: 30
+  ApiContainerHighCPU:
+    playbook: scale_api
+    extra_vars: {container: container}
+    on_resolved: scale_down_api
+  ApiContainerMemoryHigh:
+    playbook: restart_api
+    extra_vars: {container: container}
+  BackupQuotaWillFillSoon:
+    playbook: cleanup_backups
+  # Symptoms or pages: no automatic action.
+  AdPulseServingFallbackAds: {playbook: null}
+  BackupStale: {playbook: null}
+  ErrorBudgetBurnFast: {playbook: null}
+  ErrorBudgetBurnSlow: {playbook: null}
+  HealerEscalated: {playbook: null}
+  TargetMissing: {playbook: null}

@@ -1,0 +1,9 @@
+# Heal Redis: start or restart redis-<env> and wait for its health check.
+- name: Heal | restart cache
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Restart or start redis
+      ansible.builtin.include_tasks: tasks/restart_one.yml
+      vars:
+        target: "redis-{{ env }}"
