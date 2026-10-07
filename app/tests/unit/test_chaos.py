@@ -81,3 +81,15 @@ def test_memory_leak_allocates_and_is_freed_on_reset(make_client):
     assert chaos.leaked_bytes >= 1024 * 1024
     client.delete("/admin/chaos", headers=TOKEN)
     assert chaos.leaked_bytes == 0
+
+
+def test_memory_leak_plateaus_at_max_mb(make_client):
+    client, parts = make_client(chaos_enabled=True)
+    client.post("/admin/chaos/memory_leak", params={"mb_per_sec": 2, "max_mb": 3, "seconds": 60}, headers=TOKEN)
+    chaos = parts["app"].state.chaos
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        time.sleep(0.2)
+    # 2 MB/s for ~4s would be 8 MB uncapped; the cap stops growth at the first step past 3 MB.
+    assert 3 * 1024 * 1024 <= chaos.leaked_bytes <= 4 * 1024 * 1024
+    client.delete("/admin/chaos", headers=TOKEN)

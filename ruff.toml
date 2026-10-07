@@ -10,3 +10,5 @@ ignore = ["S311"]
 [lint.per-file-ignores]
 "scripts/check_dashboards.py" = ["S310"]  # urlopen on a fixed local Prometheus URL
 "**/tests/**" = ["S101", "S105", "S106"]
+"tools/rca.py" = ["E501", "S310"]  # long Markdown f-strings; urlopen on fixed local Prometheus URL
+"chaos/chaos.py" = ["S310", "S603", "S607"]  # fixed local URLs; docker CLI with argv, no shell

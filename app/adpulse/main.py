@@ -215,9 +215,13 @@ def _chaos_router(settings: Settings, chaos: ChaosState) -> APIRouter:
         return {"mode": "cpu_burn", "seconds": seconds}
 
     @router.post("/memory_leak")
-    async def memory_leak(mb_per_sec: Annotated[int, Query(ge=1, le=50)] = 5, seconds: int = seconds_q):
-        chaos.activate("memory_leak", seconds, mb_per_sec=mb_per_sec)
-        return {"mode": "memory_leak", "mb_per_sec": mb_per_sec, "seconds": seconds}
+    async def memory_leak(
+        mb_per_sec: Annotated[int, Query(ge=1, le=50)] = 5,
+        seconds: int = seconds_q,
+        max_mb: Annotated[int, Query(ge=0, le=1024)] = 0,  # 0 = grow until OOM; >0 = plateau
+    ):
+        chaos.activate("memory_leak", seconds, mb_per_sec=mb_per_sec, max_mb=max_mb)
+        return {"mode": "memory_leak", "mb_per_sec": mb_per_sec, "max_mb": max_mb, "seconds": seconds}
 
     @router.delete("")
     async def reset():

@@ -103,8 +103,10 @@ class ChaosState:
 
         async def leak() -> None:
             while (params := self.active("memory_leak")) is not None:
-                # Non-zero bytes so the pages are really resident, not lazily mapped.
-                self._leak.append(b"\xab" * (int(params.get("mb_per_sec", 5)) * MB))
+                cap = int(params.get("max_mb") or 0) * MB
+                if not cap or self.leaked_bytes < cap:
+                    # Non-zero bytes so the pages are really resident, not lazily mapped.
+                    self._leak.append(b"\xab" * (int(params.get("mb_per_sec", 5)) * MB))
                 await asyncio.sleep(1)
 
         self._leak_task = asyncio.get_running_loop().create_task(leak())
