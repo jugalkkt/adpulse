@@ -1,0 +1,116 @@
+# CI: runs on GitHub-hosted runners for every push and pull request.
+# Never deploys (that is cd.yml, on the self-hosted runner, after CI passes on main).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TERRAFORM_VERSION: 1.16.5
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: .github/ci-requirements.txt
+      - name: Install lint tools
+        run: pip install -r .github/ci-requirements.txt
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - name: ruff
+        run: ruff check . && ruff format --check .
+      - name: yamllint
+        run: make lint-yaml
+      - name: shellcheck
+        run: make lint-shell
+      - name: hadolint
+        run: make lint-docker
+      - name: actionlint
+        run: make lint-actions
+      - name: terraform fmt + validate
+        run: make lint-terraform
+      - name: ansible-lint
+        run: make lint-ansible
+      - name: puppet parser validate + puppet-lint
+        run: make lint-puppet
+      - name: cookstyle
+        run: make lint-chef
+      - name: promtool + amtool
+        run: make lint-monitoring
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:18.6-trixie@sha256:fc973eb97c9fd04bfa1840e0f510719a584ccb3be8debfe6a4144637a9dfe8cf
+        env:
+          POSTGRES_DB: adpulse
+          POSTGRES_USER: adpulse
+          POSTGRES_PASSWORD: ci-only-pg
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U adpulse -d adpulse" --health-interval 2s --health-timeout 2s --health-retries 30
+      redis:
+        # Services cannot pass a command, so the CI Redis has no password (CI-only, ephemeral).
+        image: redis:8.10.2-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 2s --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build API test image
+        run: make build-api
+      - name: Unit + integration tests (pytest, ruff) against the service containers
+        run: |
+          docker run --rm --network host --read-only --tmpfs /tmp \
+            -e ADPULSE_INTEGRATION=1 -e APP_ENV=test \
+            -e DB_HOST=127.0.0.1 -e DB_USER=adpulse -e DB_PASSWORD=ci-only-pg \
+            -e REDIS_HOST=127.0.0.1 -e REDIS_PASSWORD= \
+            "adpulse-api-test:$(git rev-parse --short HEAD)"
+      - name: Healer tests
+        run: make build-healer test-healer
+      - name: Prometheus rule tests
+        run: make test-rules
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build all images
+        run: make build
+      - name: Postgres image behaviour (Chef settings, auth, backups)
+        run: make test-postgres
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # gitleaks scans the full history
+      - name: gitleaks (full history)
+        run: bash scripts/scan.sh secrets
+      - name: Build all images
+        run: make build
+      - name: Trivy image scan (fail on CRITICAL with a fix; report HIGH)
+        run: bash scripts/scan.sh images "$(git rev-parse --short HEAD)"
+      - name: Trivy config scan (report)
+        run: bash scripts/scan.sh config

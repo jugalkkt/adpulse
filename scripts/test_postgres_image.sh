@@ -29,13 +29,13 @@ check() {  # check <description> <command...>
   if "$@"; then echo "PASS  $desc"; else echo "FAIL  $desc"; fail=1; fi
 }
 
-# Allowed subnet (staging's), and one outside the allow-list.
-docker network create "${LABELS[@]}" --subnet 172.28.10.0/24 "$P-net" >/dev/null
+# An allowed subnet that is unused locally (aws-prod's), and one outside the allow-list.
+docker network create "${LABELS[@]}" --subnet 172.28.30.0/24 "$P-net" >/dev/null
 docker network create "${LABELS[@]}" --subnet 172.28.99.0/24 "$P-outside" >/dev/null
 docker volume create "${LABELS[@]}" "$P-backups" >/dev/null
 docker volume create "${LABELS[@]}" "$P-textfile" >/dev/null
 
-docker run -d --name "$P-db" "${LABELS[@]}" --network "$P-net" \
+docker run -d --name "$P-db" "${LABELS[@]}" --network "$P-net" --user 999:999 \
   -e POSTGRES_PASSWORD="$ADMIN_PW" -e ADPULSE_APP_PASSWORD="$APP_PW" -e ADPULSE_MONITOR_PASSWORD="$MON_PW" \
   --tmpfs /var/lib/postgresql "$IMAGE" >/dev/null
 

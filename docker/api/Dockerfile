@@ -54,5 +54,7 @@ RUN python3 -m ensurepip \
 COPY app/pyproject.toml /opt/adpulse/app/pyproject.toml
 COPY app/tests /opt/adpulse/app/tests
 USER adpulse
-ENV RUFF_CACHE_DIR=/tmp/ruff PYTHONPYCACHEPREFIX=/tmp/pycache
+# Tests control their own settings: a release baked with BROKEN_RELEASE=true
+# (the Phase 10 rollback demo) must not leak into unit tests.
+ENV RUFF_CACHE_DIR=/tmp/ruff PYTHONPYCACHEPREFIX=/tmp/pycache BROKEN_RELEASE=false
 CMD ["bash", "-c", "ruff check . && ruff format --check . && pytest -q -p no:cacheprovider"]

@@ -36,6 +36,9 @@ RUN --mount=type=bind,source=config/chef,target=/chef,readonly \
     dpkg --purge cinc; \
     apt-get purge -y curl; \
     apt-get autoremove -y --purge; \
-    rm -rf /opt/cinc /etc/cinc /var/cinc /root/.cinc /root/.chef /tmp/* /var/lib/apt/lists/* /var/cache/apt/*
+    rm -rf /opt/cinc /etc/cinc /var/cinc /root/.cinc /root/.chef /tmp/* /var/lib/apt/lists/* /var/cache/apt/*; \
+    # gosu only drops root -> postgres in the entrypoint; AdPulse always runs
+    # postgres as uid 999, so it is dead code (and carried CVE-2025-68121).
+    rm -f /usr/local/bin/gosu
 
 CMD ["postgres", "-c", "config_file=/etc/adpulse-db/postgresql.conf", "-c", "hba_file=/etc/adpulse-db/pg_hba.conf"]
